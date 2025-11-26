@@ -11,7 +11,7 @@ class UserAdmin(BaseUserAdmin):
     ordering = ("username",)
     search_fields = ("username", "email",)
     fieldsets = (
-        (None, {"fields": ("usename", "email","password")}),
+        (None, {"fields": ("username", "email","password")}),
         ("Permissions", {"fields": ("is_active","is_staff","is_superuser","groups","user_permissions")}),
         ("Important dates", {"fields": ("last_login","date_joined")}),
     )
