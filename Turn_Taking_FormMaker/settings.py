@@ -43,7 +43,18 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'account',
     'rest_framework_simplejwt.token_blacklist',
+    "django.contrib.sites",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
+    "dj_rest_auth",
+    "dj_rest_auth.registration",
+    "dj_rest_auth.socialaccount",
 ]
+
+SITE_ID = 1
+
 AUTH_USER_MODEL = 'account.User'
 
 MIDDLEWARE = [
@@ -123,6 +134,22 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+ACCOUNT_AUTHENTICATION_METHOD = "username"
+ACCOUNT_EMAIL_REQUIRED = False
+ACCOUNT_EMAIL_VERIFICATION = "optional"
+ACCOUNT_UNIQUE_EMAIL = True
+
+REST_USE_JWT = True
+
+DJREST_AUTH = {
+    "USE_JWT": True,
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -52,7 +52,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, null=True, blank=True)
     mobile = models.CharField(
         max_length=11,
         unique=True,
@@ -61,7 +61,7 @@ class User(AbstractUser):
     )
 
     USERNAME_FIELD = "username"
-    REQUIRED_FIELDS = ["email", "mobile"]
+    REQUIRED_FIELDS = ["mobile"]
 
     objects = UserManager()
 
