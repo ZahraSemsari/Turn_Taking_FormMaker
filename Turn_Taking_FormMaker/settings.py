@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'Form.apps.FormConfig'
+    'FormAPI.apps.FormAPIConfig'
 ]
 
 MIDDLEWARE = [
