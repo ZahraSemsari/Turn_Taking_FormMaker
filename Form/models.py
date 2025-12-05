@@ -69,7 +69,7 @@ class FieldModel(models.Model):
         unique_together = ('form', 'name')
 
 
-class Response(models.Model):
+class AllResponse(models.Model):
 
     form = models.ForeignKey(
         'FormModel',
@@ -94,7 +94,7 @@ class Response(models.Model):
 
 class FieldResponse(models.Model):
     response = models.ForeignKey(
-        'Response',
+        'Form.AllResponse',
         on_delete=models.CASCADE,
         related_name='field_responses',
         verbose_name='پاسخ مربوطه'
