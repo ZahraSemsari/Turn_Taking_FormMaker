@@ -10,7 +10,7 @@ from . import serializers
 class FormListAPIView(APIView):
     def get(self, request):
         form_data = FormModel.objects.all()
-        serializer = serializers.FormSerializer(form_data , many=True)
+        serializer = serializers.FormListSerializer(form_data , many=True)
         return Response(serializer.data)
 
     def post(self, request):
@@ -148,8 +148,8 @@ class ResponseDetailAPIView(APIView):
 
 
 class ResponseFieldListAPIView(APIView):
-    def get(self, request, pk_f, pk_field):
-        response_data = FieldResponse.objects.filter(response__form_id=pk_f, response_fields_id=pk_field)
+    def get(self, request, pk_response, pk_field):
+        response_data = FieldResponse.objects.filter(response__form_id=pk_response, response_fields_id=pk_field)
         serializer = serializers.ResponseFieldSerializer(response_data, many=True)
         return Response(serializer.data)
 

@@ -33,6 +33,11 @@ class FormModel(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.title)
+
+        if not self.share_link:
+            self.share_link = f"/form/{self.slug}"
+
+
         super().save(*args, **kwargs)
 
 
@@ -117,7 +122,7 @@ class FieldResponse(models.Model):
         verbose_name_plural = 'پاسخ فیلدها'
 
     def __str__(self):
-        return f"{self.response_fields} → {self.value}"
+        return f"{self.response_fields} : {self.value}"
 
 
     def clean(self): # call this in the serializer

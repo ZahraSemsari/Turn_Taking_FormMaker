@@ -50,7 +50,8 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "dj_rest_auth",
     "dj_rest_auth.registration",
-    "dj_rest_auth.socialaccount",
+    # "dj_rest_auth.socialaccount",
+    "django_schema_graph",
 ]
 
 SITE_ID = 1
