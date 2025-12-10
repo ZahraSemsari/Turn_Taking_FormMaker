@@ -31,5 +31,7 @@ urlpatterns = [
         ConfirmEmailView.as_view(),
         name="account_confirm_email",
     ),
+
+    path("api/" , include("FormAPI.urls"))
 ]
 
