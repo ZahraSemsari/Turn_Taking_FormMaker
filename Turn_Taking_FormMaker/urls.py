@@ -31,6 +31,5 @@ urlpatterns = [
         ConfirmEmailView.as_view(),
         name="account_confirm_email",
     ),
-    #path("auth/registration/", include("dj_rest_auth.registration.urls")),
 ]
 
