@@ -15,11 +15,13 @@ class UserManager(BaseUserManager):
     def _create_user(self, username, email, mobile, password, **extra_fields):
         if not username:
             raise ValueError("Username is required")
-        if not mobile:
-            raise ValueError("Mobile is required")
+        # if not mobile:
+        #     raise ValueError("Mobile is required")
+
 
         email = self.normalize_email(email) if email else None
-        mobile = str(mobile).strip().replace(" ", "")
+        if mobile:
+            mobile = str(mobile).strip().replace(" ", "")
 
         user = self.model(
             username=username,
@@ -44,6 +46,8 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("Superuser must have is_superuser=True.")
+        if mobile is None:
+            raise ValueError("Users must have mobile number")
 
         return self._create_user(username, email, mobile, password, **extra_fields)
 
@@ -54,6 +58,8 @@ class User(AbstractUser):
         max_length=11,
         unique=True,
         validators=[mobile_validator],
+        null=True,
+        blank=True,
 
     )
 
