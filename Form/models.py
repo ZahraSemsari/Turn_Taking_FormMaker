@@ -35,7 +35,7 @@ class FormModel(models.Model):
             self.slug = slugify(self.title)
 
         if not self.share_link:
-            self.share_link = f"/form/{self.slug}"
+            self.share_link = f"/form/{self.slug}/"
 
 
         super().save(*args, **kwargs)
@@ -83,11 +83,11 @@ class AllResponse(models.Model):
         verbose_name='فرم مربوطه'
     )
 
-    submitted_by = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-    )
+    # submitted_by = models.CharField(
+    #     max_length=255,
+    #     blank=True,
+    #     null=True,
+    # )
     submitted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -99,7 +99,7 @@ class AllResponse(models.Model):
 
 class FieldResponse(models.Model):
     response = models.ForeignKey(
-        'Form.AllResponse',
+        'AllResponse',
         on_delete=models.CASCADE,
         related_name='field_responses',
         verbose_name='پاسخ مربوطه'

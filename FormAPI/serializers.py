@@ -33,4 +33,26 @@ class FormCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class ResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AllResponse
+        fields = [
+            "id" ,
+            "submitted_at",
+        ]
+        readonly_fields = fields
+
+# class ResponseDetailSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model =
+#         fields = [
+#
+#         ]
+#
+
+
+
+
+
+
 
