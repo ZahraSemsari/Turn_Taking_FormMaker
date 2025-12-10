@@ -22,14 +22,14 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('account/', include('account.urls')),
-
+    path('account/', include('accounts.urls')),
+    path('accounts/', include('allauth.urls')),
+    # path("auth/social/", include("dj_rest_auth.socialaccount.urls")),
     path("auth/", include("dj_rest_auth.urls")),
-    path("auth/registration/", include("dj_rest_auth.registration.urls")),
     path(
         "accounts/confirm-email/<str:key>/",
         ConfirmEmailView.as_view(),
         name="account_confirm_email",
-    )
+    ),
 ]
 
