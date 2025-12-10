@@ -25,7 +25,7 @@ class FormModel(models.Model):
         verbose_name = 'فرم'
         verbose_name_plural = 'فرم ها'
 
-    def __str__(self):
+    def str(self):
         return self.title
     def get_absolute_url(self):
         return reverse('Form:detail', args=[self.id])
@@ -35,7 +35,7 @@ class FormModel(models.Model):
             self.slug = slugify(self.title)
 
         if not self.share_link:
-            self.share_link = f"/form/{self.slug}"
+            self.share_link = f"/form/{self.slug}/"
 
 
         super().save(*args, **kwargs)
@@ -83,11 +83,11 @@ class AllResponse(models.Model):
         verbose_name='فرم مربوطه'
     )
 
-    submitted_by = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-    )
+    # submitted_by = models.CharField(
+    #     max_length=255,
+    #     blank=True,
+    #     null=True,
+    # )
     submitted_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -99,7 +99,7 @@ class AllResponse(models.Model):
 
 class FieldResponse(models.Model):
     response = models.ForeignKey(
-        'Form.AllResponse',
+        'AllResponse',
         on_delete=models.CASCADE,
         related_name='field_responses',
         verbose_name='پاسخ مربوطه'
@@ -121,11 +121,10 @@ class FieldResponse(models.Model):
         verbose_name = 'پاسخ فیلد'
         verbose_name_plural = 'پاسخ فیلدها'
 
-    def __str__(self):
+    def str(self):
         return f"{self.response_fields} : {self.value}"
 
 
     def clean(self): # call this in the serializer
         if self.response.form.id != self.response_fields.form.id:
             raise ValidationError("this response is not related to this form ")
-
