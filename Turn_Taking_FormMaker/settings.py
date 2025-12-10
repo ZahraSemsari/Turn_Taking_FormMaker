@@ -40,8 +40,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken'
     'rest_framework_simplejwt',
-    'account',
+    'accounts',
     'rest_framework_simplejwt.token_blacklist',
     "django.contrib.sites",
     "allauth",
@@ -50,7 +51,6 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "dj_rest_auth",
     "dj_rest_auth.registration",
-    # "dj_rest_auth.socialaccount",
 ]
 
 SITE_ID = 1
