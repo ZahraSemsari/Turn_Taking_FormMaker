@@ -51,8 +51,8 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "dj_rest_auth",
     "dj_rest_auth.registration",
-    "FormAPI.apps.FormAPIConfig",
-    "Form.apps.FormsConfig",
+    "FormAPI.apps.FormapiConfig",
+    "Form.apps.FormConfig",
 ]
 
 SITE_ID = 1
@@ -156,7 +156,17 @@ DJREST_AUTH = {
     "USE_JWT": True,
 }
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+DEFAULT_FROM_EMAIL = "Turn_Taking_FormMaker"
+EMAIL_HOST_USER = "fmohammadi22384@gmail.com"
+EMAIL_HOST_PASSWORD = "fefwixvzgqerzzat"
+
+ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -208,7 +218,7 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_LIFETIME": timedelta(minutes=5),
     "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=1),
 
-    "TOKEN_OBTAIN_SERIALIZER": "account.serializers.EmailOrUsernameOrMobileTokenObtainPairSerializer",
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.EmailOrUsernameOrMobileTokenObtainPairSerializer",
     "TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSerializer",
     "TOKEN_VERIFY_SERIALIZER": "rest_framework_simplejwt.serializers.TokenVerifySerializer",
     "TOKEN_BLACKLIST_SERIALIZER": "rest_framework_simplejwt.serializers.TokenBlacklistSerializer",
