@@ -70,3 +70,34 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username or self.email or self.mobile
+
+
+#---------------------------------------OTP model-------------------------------------------------------------
+
+from django.db import models
+from django.utils import timezone
+from datetime import timedelta
+import random
+
+
+class PhoneResetOTP(models.Model):
+    mobile = models.CharField(max_length=11, db_index=True)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    @staticmethod
+    def generate_code():
+        return f"{random.randint(0, 999999):06d}"
+
+    @classmethod
+    def create_otp(cls, mobile, minutes=2):
+        return cls.objects.create(
+            mobile=mobile,
+            code=cls.generate_code(),
+            expires_at=timezone.now() + timedelta(minutes=minutes),
+        )
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at

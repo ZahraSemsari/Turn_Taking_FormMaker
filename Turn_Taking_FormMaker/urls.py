@@ -18,26 +18,28 @@ from allauth.account.views import ConfirmEmailView
 from django.contrib import admin
 from django.urls import path
 from django.urls import path, include
+from accounts.views import PasswordResetConfirmEchoView
 
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('account/', include('accounts.urls')),
-    # path("auth/social/", include("dj_rest_auth.socialaccount.urls")),
-
     path(
         "accounts/confirm-email/<str:key>/",
         ConfirmEmailView.as_view(),
         name="account_confirm_email",
     ),
-
     path("auth/registration/account-confirm-email/<str:key>/",
          ConfirmEmailView.as_view(),
          name="dj_rest_auth_account_confirm_email"),
-    path('accounts/', include('allauth.urls')),
     path("auth/", include("dj_rest_auth.urls")),
     path("auth/registration/", include("dj_rest_auth.registration.urls")),
-    path("api/" , include("FormAPI.urls"))
+    path("api/" , include("FormAPI.urls")),
+    path(
+        "accounts/reset/<uidb64>/<token>/",
+        PasswordResetConfirmEchoView.as_view(),
+        name="password_reset_confirm",
+    ),
 ]
 

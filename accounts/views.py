@@ -115,4 +115,125 @@ class GoogleLogin(SocialLoginView):
     # callback_url = "http://localhost:8000/"
 
 
+def detect_identifier_type(identifier: str) -> str:
+    identifier = (identifier or "").strip()
+    if "@" in identifier:
+        return "email"
+    if identifier.isdigit() and len(identifier) == 11 and identifier.startswith("09"):
+        return "mobile"
+    return "username"
 
+#-------------------------------just with email password reset--------------------------------------------------------
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class PasswordResetConfirmEchoView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, uidb64, token, *args, **kwargs):
+        return Response(
+            {"uid": uidb64, "token": token},
+            status=status.HTTP_200_OK
+        )
+
+#-----------------------password reset with mobile and switch-------------------------------------------------------
+def send_sms(mobile, text):
+    print(f"[SMS to {mobile}] {text}")
+
+from dj_rest_auth.serializers import PasswordResetSerializer
+from django.utils import timezone
+from .models import PhoneResetOTP
+
+
+class PasswordResetRequestView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        identifier = (request.data.get("identifier") or "").strip()
+        if not identifier:
+            return Response({"identifier": "required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        id_type = detect_identifier_type(identifier)
+
+        email_response = {"method": "email", "detail": "if there is account , email has sent"}
+        sms_response = {"method": "sms", "detail": "if there is account , code has sent"}
+
+        if id_type == "email":
+            user = User.objects.filter(email__iexact=identifier).first()
+            if user:
+                ser = PasswordResetSerializer(data={"email": user.email}, context={"request": request})
+                ser.is_valid(raise_exception=True)
+                ser.save()
+            return Response(email_response, status=status.HTTP_200_OK)
+
+
+        if id_type == "mobile":
+            user = User.objects.filter(mobile=identifier).first()
+            if not user:
+                return Response(sms_response, status=status.HTTP_200_OK)
+
+            if user.email:
+                ser = PasswordResetSerializer(data={"email": user.email}, context={"request": request})
+                ser.is_valid(raise_exception=True)
+                ser.save()
+                return Response(email_response, status=status.HTTP_200_OK)
+
+
+            otp = PhoneResetOTP.create_otp(mobile=user.mobile, minutes=5)
+            send_sms(user.mobile, f"code: {otp.code} (credit value up to 2 minutes)")
+            return Response(sms_response, status=status.HTTP_200_OK)
+
+        user = User.objects.filter(username__iexact=identifier).first()
+        if not user:
+            return Response(email_response, status=status.HTTP_200_OK)
+
+        if user.email:
+            ser = PasswordResetSerializer(data={"email": user.email}, context={"request": request})
+            ser.is_valid(raise_exception=True)
+            ser.save()
+            return Response(email_response, status=status.HTTP_200_OK)
+
+        if getattr(user, "mobile", None):
+            otp = PhoneResetOTP.create_otp(mobile=user.mobile, minutes=5)
+            send_sms(user.mobile, f"code: {otp.code} (credit value up to 2 minutes)")
+            return Response(sms_response, status=status.HTTP_200_OK)
+
+        return Response(email_response, status=status.HTTP_200_OK)
+
+class PasswordResetOTPConfirmView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        mobile = (request.data.get("mobile") or "").strip()
+        code = (request.data.get("code") or "").strip()
+        new_password = request.data.get("new_password")
+
+        if not mobile or not code or not new_password:
+            return Response({"detail": "mobile, code, new_password are required"},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(mobile=mobile).first()
+        if not user:
+            return Response({"detail": "invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp = PhoneResetOTP.objects.filter(
+            mobile=mobile,
+            code=code,
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).order_by("-created_at").first()
+
+        if not otp:
+            return Response({"detail": "invalid code"}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp.is_used = True
+        otp.save(update_fields=["is_used"])
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        return Response({"detail": "password changed"}, status=status.HTTP_200_OK)

@@ -168,6 +168,8 @@ EMAIL_HOST_PASSWORD = "fefwixvzgqerzzat"
 
 ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 
+FRONTEND_URL = "http://127.0.0.1:8000"
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
