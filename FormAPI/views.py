@@ -1,4 +1,5 @@
 from django.http import Http404
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -14,7 +15,7 @@ class FormListAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        form_data = serializers.formModelSerializer(data=request.data)
+        form_data = serializers.FormDetailSerializer(data=request.data)
         if form_data.is_valid():
             form_data.save()
             return Response(form_data.data, status=status.HTTP_201_CREATED)
@@ -30,7 +31,7 @@ class FormDetailsAPIView(APIView):
 
     def get(self, request, pk):
         form_data = self.get_object(pk)
-        serializer = serializers.FormSerializer(form_data)
+        serializer = serializers.FormDetailSerializer(form_data)
         return Response(serializer.data)
 
     def delete(self, request , pk):
@@ -40,7 +41,8 @@ class FormDetailsAPIView(APIView):
 
     def patch(self , request , pk):
         form_data = self.get_object(pk)
-        serializer = serializers.FormSerializer(form_data, data=request.data, partial=True)
+        # serializer = serializers.FormCreateUpdateSerializer(form_data, data=request.data, partial=True)
+        serializer = serializers.FormDetailSerializer(form_data, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
@@ -55,13 +57,52 @@ class FieldListAPIView(APIView):
 
 
     def post(self, request , pk_f):
-        data = request.data.copy()
-        data['form'] = pk_f
-        serializer = serializers.FieldSerializer(data=data)
+        serializer = serializers.FieldSerializer(data=request.data , many=True)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(form=FormModel.objects.get(pk=pk_f))
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk_f):
+        fields_data = request.data
+
+        if not isinstance(fields_data, list):
+            return Response(
+                {"detail": "fields must be a list"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        form = get_object_or_404(FormModel, pk=pk_f)
+
+        existing_fields = {
+            field.id: field for field in form.fields.all()
+        }
+
+        updated_ids = []
+
+        for field_data in fields_data:
+            field_id = field_data.get("id")
+
+            if field_id and field_id in existing_fields:
+                # update
+                field_obj = existing_fields[field_id]
+                serializer = serializers.FieldSerializer(
+                    field_obj,
+                    data=field_data,
+                    partial=True
+                )
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                updated_ids.append(field_id)
+
+            else:
+                # create
+                serializer = serializers.FieldSerializer(data=field_data)
+                serializer.is_valid(raise_exception=True)
+                serializer.save(form=form)
+                updated_ids.append(serializer.instance.id)
+
+        return Response({"updated_fields": updated_ids})
 
 class FieldDetailsAPIView(APIView):
     def get_object(self, pk_f ,pk ):
@@ -117,42 +158,33 @@ class ResponseDetailAPIView(APIView):
 
     def get(self, request, pk_f, pk):
         response_data = self.get_object(pk_f, pk)
-        answers = response_data.field_responses.all()
 
         form_id = response_data.form_id
-        # total_fields = FieldModel.objects.filter(form_id=form_id).count()
-        # answered_fields = answers.count()
-
-        response_serializer = serializers.ResponseSerializer(response_data)
-        answers_serializer = serializers.ResponseDetailSerializer(answers, many=True)
-
-        return Response({
-            "id": response_serializer.data["id"],
-            "form_id": form_id,
-            # "submitted_by": response_serializer.data["submitted_by"],
-            "submitted_at": response_serializer.data["submitted_at"],
-            "answers": answers_serializer.data
-        })
 
 
-    def delete(self, request , pk_f , pk):
-        response_data = self.get_object( pk_f , pk)
-        response_data.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-    # def patch(self, request , pk_f , pk):
+        response_serializer = serializers.ResponseDetailSerializer(response_data)
+
+
+        return Response(response_serializer.data)
+
+
+    # def delete(self, request , pk_f , pk):
     #     response_data = self.get_object( pk_f , pk)
-    #     serializer = serializers.ResponseSerializer(response_data , data = request.data , partial=True)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    #     response_data.delete()
+    #     return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 
 class ResponseFieldListAPIView(APIView):
-    def get(self, request, pk_response, pk_field):
-        response_data = FieldResponse.objects.filter(response__form_id=pk_response, response_fields_id=pk_field)
-        serializer = serializers.ResponseFieldSerializer(response_data, many=True)
+    def get(self, request, pk_f, pk_field):
+        responses = FieldResponse.objects.filter(
+            response__form_id=pk_f,
+            response_fields_id=pk_field
+        )
+
+        serializer = serializers.ResponseFieldSerializer(responses, many=True)
         return Response(serializer.data)
+
 
 
 class SubmitAPIView(APIView):

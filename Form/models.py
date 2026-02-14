@@ -1,4 +1,6 @@
 # from django.contrib.auth.models import User
+from importlib.metadata import requires
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.forms.fields import ChoiceField
@@ -11,7 +13,7 @@ from django.core.exceptions import ValidationError
 class FormModel(models.Model):
     id = models.AutoField(primary_key=True)
     title = models.CharField(max_length=200, default="نام فرم")
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     # after creating the user
     # created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=True)
@@ -32,7 +34,7 @@ class FormModel(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)
+            self.slug = slugify(self.title , allow_unicode=True)
 
         if not self.share_link:
             self.share_link = f"/form/{self.slug}/"
@@ -128,3 +130,5 @@ class FieldResponse(models.Model):
     def clean(self): # call this in the serializer
         if self.response.form.id != self.response_fields.form.id:
             raise ValidationError("this response is not related to this form ")
+
+

@@ -51,8 +51,9 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "dj_rest_auth",
     "dj_rest_auth.registration",
-    "FormAPI.apps.FormAPIConfig",
-    "Form.apps.FormsConfig",
+    "FormAPI.apps.FormapiConfig",
+    "Form.apps.FormConfig",
+    "django_extensions",
 ]
 
 SITE_ID = 1

@@ -20,7 +20,7 @@ urlpatterns = [
     path("forms/<int:pk_f>/responses/", ResponseListAPIView.as_view(), name="response-list"),
     path("forms/<int:pk_f>/responses/<int:pk>/", ResponseDetailAPIView.as_view(), name="response-detail"),
 
-    path("forms/<int:pk_response>/fields/<int:pk_field>/responses/", ResponseFieldListAPIView.as_view(), name="field-responses"),
+    path("forms/<int:pk_f>/fields/<int:pk_field>/responses/", ResponseFieldListAPIView.as_view(), name="field-responses"),
 
     path("forms/<int:pk_f>/submit/", SubmitAPIView.as_view(), name="form-submit"),
 ]
