@@ -84,6 +84,12 @@ def register(request):
             )
             if not email_address.verified:
                 email_address.send_confirmation(request , signup=False)
+        
+        #--------------compelete-profile---------------------------
+        user_data = UserSerializer(user).data
+        user_data["profile_incomplete"] = (
+            not user.mobile or not user.has_usable_password()
+        )
 
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
@@ -111,6 +117,19 @@ from django.conf import settings
 
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
+
+    def get_response(self):
+        response = super().get_response()
+
+        user = self.user
+
+        #--------------compelete-profile---------------------------
+        response.data["profile_incomplete"] = (
+            not user.mobile or not user.has_usable_password()
+        )
+
+        return response
+    
     # client_class = OAuth2Client
     # callback_url = "http://localhost:8000/"
 
@@ -237,3 +256,54 @@ class PasswordResetOTPConfirmView(APIView):
         user.save(update_fields=["password"])
 
         return Response({"detail": "password changed"}, status=status.HTTP_200_OK)
+
+
+#---------------------compelete-profile-------------------------------
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def complete_profile(request):
+    user = request.user
+
+    # موبایل (اجباری)
+    mobile = request.data.get("mobile")
+    if not mobile and not user.mobile:
+        return Response({"mobile": "Mobile is required"}, status=400)
+    if mobile:
+        if not mobile.isdigit() or len(mobile) != 11:
+            return Response({"mobile": "Mobile must be 11 digits"}, status=400)
+        user.mobile = mobile
+
+    # رمز (اجباری اگر قبلاً رمز نداشته)
+    password = request.data.get("password")
+    if not password and not user.has_usable_password():
+        return Response({"password": "Password is required"}, status=400)
+    if password:
+        if len(password) < 8:
+            return Response({"password": "Password must be at least 8 chars"}, status=400)
+        user.set_password(password)
+
+    # نام و نام خانوادگی (اختیاری)
+    first_name = request.data.get("first_name")
+    last_name = request.data.get("last_name")
+    if first_name:
+        user.first_name = first_name
+    if last_name:
+        user.last_name = last_name
+
+    user.save()
+
+    return Response({
+        "detail": "Profile updated successfully",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "mobile": user.mobile,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+        }
+    })

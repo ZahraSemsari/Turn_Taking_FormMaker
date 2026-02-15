@@ -59,6 +59,11 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
         data = super().validate(attrs)
         user = self.user
 
+        #-----------------compelete-profile------------------------
+        data["profile_incomplete"] = (
+                not user.mobile or not user.has_usable_password()
+                )
+
         if user and user.email :
             email_qs = EmailAddress.objects.filter(
                 user=user,

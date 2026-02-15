@@ -62,7 +62,13 @@ class User(AbstractUser):
         blank=True,
 
     )
+    
+    #-----------------------profile-check------------------------------
 
+    is_profile_completed = models.BooleanField(default=False)
+    has_set_password = models.BooleanField(default=False)
+
+    
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["mobile"]
 
