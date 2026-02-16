@@ -161,7 +161,8 @@ class ResponseDetailSerializer(serializers.ModelSerializer):
 
 
 class FieldResponseSerializer(serializers.ModelSerializer):
-    response_fields = serializers.PrimaryKeyRelatedField(queryset=FieldModel.objects.all())
+    
+    response_fields = serializers.PrimaryKeyRelatedField(queryset=FieldModel.objects.select_related("form"))
 
     class Meta:
         model = FieldResponse
@@ -172,11 +173,7 @@ class FieldResponseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('id',)
 
-    def validate(self, attrs):
-        field = attrs.get("response_fields")
-        value = attrs.get("value")
-        validate_value_for_field(field, value)
-        return attrs
+    
 
 
 
