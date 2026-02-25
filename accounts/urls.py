@@ -1,6 +1,6 @@
 from . import views
 from django.urls import path
-from .views import MyTokenObtainPairView
+from .views import MyTokenObtainPairView, SignupOTPRequestView
 from .views import GoogleLogin, PasswordResetRequestView, PasswordResetOTPConfirmView , complete_profile
 
 
@@ -19,5 +19,6 @@ urlpatterns = [
     path('profile/complete/', complete_profile, name='complete_profile'),
 #   #معمولاً با توکن JWT کار می‌کنه و اطلاعات همان کاربری که توکن متعلق به اوست را برمی‌گرداند.
     path('me/', views.GetUserInfo),
+    path("signup/otp/request/", SignupOTPRequestView.as_view(), name='signup-otp-request'),
 
 ]

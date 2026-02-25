@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from allauth.account.models import EmailAddress
+from .models import PhoneOTP
 
 
 User = get_user_model()
@@ -60,9 +61,7 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
         user = self.user
 
         #-----------------compelete-profile------------------------
-        data["profile_incomplete"] = (
-                not user.mobile or not user.has_usable_password()
-                )
+        data["profile_incomplete"] = str( not user.mobile or not user.has_usable_password())
 
         if user and user.email :
             email_qs = EmailAddress.objects.filter(
@@ -88,39 +87,84 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(
-        required=False,
-        allow_null=True,
-        allow_blank=True
-    )
+    """
+    Mobile signup requires OTP verification.
+    Client flow:
+      1) POST /signup/otp/request   { mobile }
+      2) POST /register            { username, mobile, password, otp_code, email(optional) }
+    """
+
+    email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
+
     mobile = serializers.CharField(
         required=True,
         validators=[
             UniqueValidator(
                 queryset=User.objects.all(),
-                message="This Mobile is already in use.",
+                message="This mobile number is already in use.",
             )
         ],
     )
+
     password = serializers.CharField(write_only=True, min_length=8)
+    otp_code = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ("id", "username", "email", "mobile", "password")
+        fields = ("id", "username", "email", "mobile", "password", "otp_code")
         extra_kwargs = {
             "mobile": {"required": True},
             "email": {"required": False, "allow_null": True, "allow_blank": True},
         }
 
-
     def validate_mobile(self, value):
+        value = (value or "").strip()
         if not value:
-            raise serializers.ValidationError("Mobile number is required")
+            raise serializers.ValidationError("Mobile number is required.")
         if not value.isdigit() or len(value) != 11:
-            raise serializers.ValidationError("Mobile must be 11 digit.")
+            raise serializers.ValidationError("Mobile must be exactly 11 digits.")
+        if not value.startswith("09"):
+            raise serializers.ValidationError("Mobile number must start with '09'.")
         return value
 
+    def validate_otp_code(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("OTP code is required.")
+        if not value.isdigit() or len(value) != 6:
+            raise serializers.ValidationError("OTP code must be exactly 6 digits.")
+        return value
+
+    def validate(self, attrs):
+        """
+        Verify OTP before allowing user creation.
+        OTP is consumed (marked used) only if it is valid.
+        """
+        mobile = attrs.get("mobile")
+        otp_code = attrs.get("otp_code")
+
+        is_valid = PhoneOTP.verify_otp(
+            mobile=mobile,
+            purpose=PhoneOTP.Purpose.SIGNUP,
+            code=otp_code,
+            max_attempts=5,
+            lock_minutes=10,
+        )
+
+        if not is_valid:
+            raise serializers.ValidationError(
+                {"otp_code": "Invalid or expired verification code."}
+            )
+
+        return attrs
+
     def create(self, validated_data):
+        """
+        Create the user after OTP is verified.
+        Note: otp_code is not stored in user model.
+        """
+        validated_data.pop("otp_code", None)
+
         user = User.objects.create_user(
             username=validated_data["username"],
             email=validated_data.get("email"),
@@ -128,4 +172,3 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data["password"],
         )
         return user
-

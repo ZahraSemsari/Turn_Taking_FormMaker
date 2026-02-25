@@ -79,31 +79,138 @@ class User(AbstractUser):
 
 
 #---------------------------------------OTP model-------------------------------------------------------------
+# models.py
 
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
 import random
 
+from django.contrib.auth.hashers import make_password, check_password
 
-class PhoneResetOTP(models.Model):
+
+class PhoneOTP(models.Model):
+    class Purpose(models.TextChoices):
+        RESET_PASSWORD = "reset_password", "Reset password"
+        SIGNUP = "signup", "Signup"
+
     mobile = models.CharField(max_length=11, db_index=True)
-    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=32, choices=Purpose.choices, db_index=True)
+
+    code_hash = models.CharField(max_length=128)  # hashed OTP
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField()
-    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(db_index=True)
+
+    is_used = models.BooleanField(default=False, db_index=True)
+
+    failed_attempts = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["mobile", "purpose", "-created_at"]),
+        ]
 
     @staticmethod
-    def generate_code():
+    def generate_code() -> str:
         return f"{random.randint(0, 999999):06d}"
 
+    @staticmethod
+    def _now():
+        return timezone.now()
+
     @classmethod
-    def create_otp(cls, mobile, minutes=2):
-        return cls.objects.create(
+    def _active_qs(cls, mobile: str, purpose: str):
+        now = cls._now()
+        return cls.objects.filter(
             mobile=mobile,
-            code=cls.generate_code(),
-            expires_at=timezone.now() + timedelta(minutes=minutes),
+            purpose=purpose,
+            is_used=False,
+            expires_at__gt=now,
         )
 
-    def is_expired(self):
-        return timezone.now() > self.expires_at
+    @classmethod
+    def request_otp(
+        cls,
+        *,
+        mobile: str,
+        purpose: str,
+        minutes: int = 5,
+        cooldown_seconds: int = 60,
+        max_attempts: int = 5,
+        lock_minutes: int = 10,
+    ) -> str:
+        """
+        Creates a new OTP and returns the raw code (ONLY to send via SMS).
+        Stores only a hash in DB.
+        Enforces:
+        - lockout window
+        - cooldown/rate limit
+        - invalidates previous active OTPs
+        """
+        now = cls._now()
+
+        latest = cls.objects.filter(mobile=mobile, purpose=purpose).order_by("-created_at").first()
+        if latest and latest.locked_until and latest.locked_until > now:
+            remaining = int((latest.locked_until - now).total_seconds())
+            raise ValueError(f"locked:{remaining}")
+
+        # rate limit: 1 per cooldown_seconds
+        if latest and (now - latest.created_at).total_seconds() < cooldown_seconds:
+            remaining = int(cooldown_seconds - (now - latest.created_at).total_seconds())
+            raise ValueError(f"cooldown:{remaining}")
+
+        # invalidate previous active OTPs (so only 1 valid at a time)
+        cls._active_qs(mobile, purpose).update(is_used=True)
+
+        code = cls.generate_code()
+        cls.objects.create(
+            mobile=mobile,
+            purpose=purpose,
+            code_hash=make_password(code),
+            expires_at=now + timedelta(minutes=minutes),
+            is_used=False,
+            failed_attempts=0,
+            locked_until=None,
+        )
+        return code
+
+    @classmethod
+    def verify_otp(
+        cls,
+        *,
+        mobile: str,
+        purpose: str,
+        code: str,
+        max_attempts: int = 5,
+        lock_minutes: int = 10,
+    ) -> bool:
+        """
+        Verifies the latest active OTP.
+        On failure increments attempts; on reaching max_attempts locks for lock_minutes.
+        """
+        now = cls._now()
+
+        otp = cls._active_qs(mobile, purpose).order_by("-created_at").first()
+        if not otp:
+            return False
+
+        if otp.locked_until and otp.locked_until > now:
+            return False
+
+        if check_password(code, otp.code_hash):
+            otp.is_used = True
+            otp.save(update_fields=["is_used"])
+            return True
+
+        # wrong code
+        otp.failed_attempts += 1
+        updates = ["failed_attempts"]
+
+        if otp.failed_attempts >= max_attempts:
+            otp.locked_until = now + timedelta(minutes=lock_minutes)
+            otp.is_used = True  # invalidate this OTP
+            updates += ["locked_until", "is_used"]
+
+        otp.save(update_fields=updates)
+        return False

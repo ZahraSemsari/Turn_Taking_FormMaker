@@ -132,6 +132,13 @@ USE_I18N = True
 
 USE_TZ = True
 
+# settings.py
+
+SMS_PROVIDER = "innosms"  # یا هرچی دوست دارید
+SMS_API_BASE_URL = "https://oldsms.innostart.ir"  # نمونه
+SMS_API_KEY = ""  # بعداً از پنل می‌گیرید
+SMS_SENDER = ""   # اگر پنل نیاز داره (شماره/خط/نام فرستنده)
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -180,6 +187,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
 }
+
 
 
 #تنظیمات jwt که کپی کردیم از سایت
