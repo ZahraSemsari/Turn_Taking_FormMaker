@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from Form.models import *
 from . import serializers
@@ -15,7 +16,7 @@ class FormListAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        form_data = serializers.FormDetailSerializer(data=request.data)
+        form_data = serializers.FormCreateUpdateSerializer(data=request.data)
         if form_data.is_valid():
             form_data.save()
             return Response(form_data.data, status=status.HTTP_201_CREATED)
@@ -188,11 +189,13 @@ class ResponseFieldListAPIView(APIView):
 
 
 class SubmitAPIView(APIView):
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
     def post(self, request, pk_f):
 
         serializer = serializers.SubmitSerializer(
             data=request.data,
-            context={"form_id": pk_f}
+            context={"form_id": pk_f, "request": request}
         )
 
         if serializer.is_valid():
@@ -200,5 +203,3 @@ class SubmitAPIView(APIView):
             return Response({"response_id": response.id}, status=201)
 
         return Response(serializer.errors, status=400)
-
-

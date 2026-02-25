@@ -1,6 +1,6 @@
 # from django.contrib.auth.models import User
 from importlib.metadata import requires
-
+from .config_schema import default_config_for, validate_config_for_field
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.forms.fields import ChoiceField
@@ -74,6 +74,16 @@ class FieldModel(models.Model):
 
     class Meta:
         unique_together = ('form', 'name')
+    
+    def clean(self):
+        super().clean()
+        if not self.config:
+            self.config = default_config_for(self.field_type)
+        validate_config_for_field(self.field_type, self.config)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class AllResponse(models.Model):
@@ -117,6 +127,7 @@ class FieldResponse(models.Model):
         blank=True,
         null=True,
     )
+    uploaded_file = models.FileField(upload_to="form_uploads/%Y/%m/%d/", null=True, blank=True)
 
 
     class Meta:

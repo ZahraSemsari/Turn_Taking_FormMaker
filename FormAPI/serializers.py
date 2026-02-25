@@ -2,8 +2,10 @@ from rest_framework import serializers
 from Form.models import *
 from django.db import transaction
 import re
+import os
 from datetime import date, time
-
+from Form.config_schema import default_config_for, validate_config_for_field
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 class FormListSerializer(serializers.ModelSerializer):
@@ -61,6 +63,25 @@ class FieldSerializer(serializers.ModelSerializer):
         ]
 
 
+    def validate(self, attrs):
+        field_type = attrs.get("field_type") or getattr(self.instance, "field_type", None)
+        config = attrs.get("config", getattr(self.instance, "config", None))
+
+        if field_type is None:
+            return attrs
+
+        if not config:
+            config = default_config_for(field_type)
+            attrs["config"] = config
+
+        try:
+            validate_config_for_field(field_type, config)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"config": exc.messages})
+
+        return attrs
+
+
 class FormDetailSerializer(serializers.ModelSerializer):
     fields = FieldSerializer(many=True)
 
@@ -87,41 +108,43 @@ class FormDetailSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        fields_data = validated_data.pop("fields", [])
+        fields_were_sent = "fields" in validated_data
+        fields_data = validated_data.pop("fields", None) 
 
-        # 🔹 1. update خود فرم
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # 🔹 2. Fieldهای موجود
-        existing_fields = {
-            field.id: field for field in instance.fields.all()
-        }
+        if not fields_were_sent:
+            return instance
 
-        sent_field_ids = []
+        fields_data = fields_data or []
+
+        existing_fields = {f.id: f for f in instance.fields.all()}
+        kept_ids = set()
 
         for field_data in fields_data:
             field_id = field_data.get("id")
 
             if field_id and field_id in existing_fields:
-                # update
                 field_obj = existing_fields[field_id]
+
+                field_data.pop("id", None)
+
                 for attr, value in field_data.items():
                     setattr(field_obj, attr, value)
                 field_obj.save()
-                sent_field_ids.append(field_id)
-
+                kept_ids.add(field_id)
             else:
-                # create
-                new_field = FieldModel.objects.create(
-                    form=instance,
-                    **field_data
-                )
-                sent_field_ids.append(new_field.id)
+                field_data.pop("id", None)
+                new_field = FieldModel.objects.create(form=instance, **field_data)
+                kept_ids.add(new_field.id)
+
+        to_delete_ids = set(existing_fields.keys()) - kept_ids
+        if to_delete_ids:
+            FieldModel.objects.filter(form=instance, id__in=to_delete_ids).delete()
 
         return instance
-
 
 
 class ResponseSerializer(serializers.ModelSerializer):
@@ -197,6 +220,9 @@ class SubmitSerializer(serializers.ModelSerializer):
         form_id = self.context.get("form_id")
         if not form_id:
             raise serializers.ValidationError({"form": "Form id is required in serializer context."})
+        request = self.context.get("request")
+        if request is None:
+            raise serializers.ValidationError({"detail": "Request is required in serializer context."})
 
         try:
             form = FormModel.objects.prefetch_related("fields").get(pk=form_id)
@@ -218,12 +244,44 @@ class SubmitSerializer(serializers.ModelSerializer):
 
             field_id = field_obj.id
             form_field = form_fields.get(field_id)
+            
             if not form_field:
                 item_errors[index] = {"response_fields": f"Field {field_id} does not belong to this form."}
                 continue
 
             if field_id in sent_field_ids:
                 item_errors[index] = {"response_fields": f"Duplicate answer for field {field_id}."}
+                continue
+
+            if form_field.field_type == "file":
+                uploaded = request.FILES.get(f"file_{field_id}")
+
+                if not uploaded:
+                    if form_field.is_required:
+                        item_errors[index] = {"file": "This file is required."}
+                    else:
+                        item_errors[index] = {"file": f"Upload file with key: file_{field_id}"}
+                    continue
+
+                config = form_field.config or {}
+                allowed_mime_types = config.get("allowed_mime_types") or []
+                allowed_extensions = [ext.lower() for ext in (config.get("allowed_extensions") or [])]
+                max_size_mb = config.get("max_size_mb")
+
+                if allowed_mime_types and uploaded.content_type not in allowed_mime_types:
+                    item_errors[index] = {"file": f"Invalid content type: {uploaded.content_type}"}
+                    continue
+
+                file_ext = os.path.splitext(uploaded.name)[1].lower()
+                if allowed_extensions and file_ext not in allowed_extensions:
+                    item_errors[index] = {"file": f"Invalid file extension: {file_ext}"}
+                    continue
+
+                if max_size_mb is not None and uploaded.size > int(max_size_mb * 1024 * 1024):
+                    item_errors[index] = {"file": f"File too large. Maximum size is {max_size_mb} MB."}
+                    continue
+
+                sent_field_ids.add(field_id)
                 continue
 
             if form_field.is_required and value in (None, "", []):
@@ -261,17 +319,26 @@ class SubmitSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         field_responses_data = validated_data.pop("field_responses", [])
         form = validated_data.pop("form")
+        request = self.context.get("request")
+        if request is None:
+            raise serializers.ValidationError({"detail": "Request is required in serializer context."})
 
         response = AllResponse.objects.create(form=form)
-        field_responses = [
-            FieldResponse(
+        for item in field_responses_data:
+            field_obj = item["response_fields"]
+            field_response = FieldResponse(
                 response=response,
-                response_fields=item["response_fields"],
-                value=item.get("value"),
+                response_fields=field_obj,
             )
-            for item in field_responses_data
-        ]
-        FieldResponse.objects.bulk_create(field_responses)
+
+            if field_obj.field_type == "file":
+                field_response.uploaded_file = request.FILES.get(f"file_{field_obj.id}")
+                field_response.value = None
+            else:
+                field_response.value = item.get("value")
+
+            field_response.save()
+
         return response
 
 
@@ -350,8 +417,7 @@ def validate_value_for_field(field: FieldModel, value):
         return
 
     if field_type == "file":
-        if not isinstance(value, (str, dict)):
-            raise serializers.ValidationError("File value must be a file URL string or metadata object.")
+        # File validation is handled in SubmitSerializer.validate() via request.FILES.
         return
 
 
@@ -397,5 +463,4 @@ def _get_allowed_choices(config):
         else:
             normalized.append(choice)
     return normalized
-
 
