@@ -91,7 +91,7 @@ def register(request):
             not user.mobile or not user.has_usable_password()
         )
 
-        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+        return Response(user_data, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -305,5 +305,6 @@ def complete_profile(request):
             "mobile": user.mobile,
             "first_name": user.first_name,
             "last_name": user.last_name,
+            "profile_incomplete": (not user.mobile or not user.has_usable_password())
         }
     })
