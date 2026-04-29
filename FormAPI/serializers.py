@@ -235,6 +235,12 @@ class SubmitSerializer(serializers.ModelSerializer):
         item_errors = {}
 
         for index, item in enumerate(responses):
+            if not isinstance(item, dict):
+                item_errors[index] = {
+                    "non_field_errors": "Each item in field_responses must be an object."
+                }
+                continue
+
             field_obj = item.get("response_fields")
             value = item.get("value")
 
@@ -463,4 +469,3 @@ def _get_allowed_choices(config):
         else:
             normalized.append(choice)
     return normalized
-

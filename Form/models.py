@@ -65,7 +65,7 @@ class FieldModel(models.Model):
 
     form = models.ForeignKey('FormModel', on_delete=models.CASCADE, related_name='fields')
     field_type = models.CharField(choices=field_name, max_length=20)
-    config = models.JSONField(default=dict) # this feature should come from the front
+    config = models.JSONField(default=dict,blank=True) # this feature should come from the front
     name = models.CharField(max_length=200 )
     label = models.CharField(max_length=200)
     order_index = models.IntegerField(default=0)

@@ -1,3 +1,5 @@
+import json
+
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
@@ -132,14 +134,16 @@ class FieldDetailsAPIView(APIView):
 
 
 class ResponseListAPIView(APIView):
-    def get(self , request , pk_f):
+    def get(self, request, pk_f):
         response_data = AllResponse.objects.filter(form_id=pk_f)
         answers = response_data.count()
 
         response_serializer = serializers.ResponseSerializer(response_data, many=True)
-        data = response_serializer.data.copy()
-        data['answer_count'] = answers
-        return Response(response_serializer.data)
+
+        return Response({
+            "answer_count": answers,
+            "results": response_serializer.data
+        })
 
     # def post(self, request , pk_f):
     #     data = request.data.copy()
@@ -188,13 +192,45 @@ class ResponseFieldListAPIView(APIView):
 
 
 
+# class SubmitAPIView(APIView):
+#     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+#     def post(self, request, pk_f):
+
+#         serializer = serializers.SubmitSerializer(
+#             data=request.data,
+#             context={"form_id": pk_f, "request": request}
+#         )
+
+#         if serializer.is_valid():
+#             response = serializer.save()
+#             return Response({"response_id": response.id}, status=201)
+
+#         return Response(serializer.errors, status=400)
+
+
+
+
 class SubmitAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, pk_f):
+        data = request.data
+
+        # اگر field_responses به صورت string (در multipart) آمده باشد، آن را JSON parse کن
+        field_responses_raw = data.get("field_responses")
+        if isinstance(field_responses_raw, str):
+            try:
+                parsed = json.loads(field_responses_raw)
+            except json.JSONDecodeError:
+                return Response(
+                    {"field_responses": ["Invalid JSON format."]},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            data = {"field_responses": parsed}
 
         serializer = serializers.SubmitSerializer(
-            data=request.data,
+            data=data,
             context={"form_id": pk_f, "request": request}
         )
 
