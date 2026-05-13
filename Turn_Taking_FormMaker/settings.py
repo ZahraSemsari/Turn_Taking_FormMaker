@@ -134,10 +134,14 @@ USE_TZ = True
 
 # settings.py
 
-SMS_PROVIDER = "innosms"  # یا هرچی دوست دارید
-SMS_API_BASE_URL = "https://oldsms.innostart.ir"  # نمونه
-SMS_API_KEY = ""  # بعداً از پنل می‌گیرید
-SMS_SENDER = ""   # اگر پنل نیاز داره (شماره/خط/نام فرستنده)
+SMS_PROVIDER = "ippanel"
+SMS_API_BASE_URL = "https://edge.ippanel.com/v1/api/send"
+SMS_API_KEY = "YTFhYWRiZDctZGVlYi00ZjUzLTk3YmEtY2NjODkzYzM3OWYzOTczNjBiMjI5OTJjOGRmYTc2YjNhYjgwODQ0M2Q3YzY="
+SMS_SENDER = "+983000505"
+SMS_PATTERN_OTP = "zfrt8xouasi8bf2"
+OTP_LENGTH = 6
+OTP_EXPIRE_SECONDS = 120
+OTP_SMS_RETRIES = 2
 
 
 # Static files (CSS, JavaScript, Images)

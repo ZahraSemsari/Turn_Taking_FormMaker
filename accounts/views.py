@@ -15,6 +15,8 @@ from rest_framework.response import Response
 import requests
 from django.conf import settings
 from django.utils import timezone
+import logging
+from time import sleep
 
 User = get_user_model()
 
@@ -178,7 +180,7 @@ class PasswordResetRequestView(APIView):
 
                 return Response({"detail": "cannot send code"}, status=400)
 
-            send_sms(user.mobile, f"code : {code}")
+            send_sms(user.mobile, code)
             return Response(sms_response, status=status.HTTP_200_OK)
 
         user = User.objects.filter(username__iexact=identifier).first()
@@ -220,7 +222,7 @@ class PasswordResetRequestView(APIView):
                     )
                 return Response({"detail": "cannot send code"}, status=400)
 
-            send_sms(user.mobile, f"code : {code}")
+            send_sms(user.mobile, code)
             return Response(sms_response, status=status.HTTP_200_OK)
 
         return Response(email_response, status=status.HTTP_200_OK)
@@ -327,28 +329,74 @@ def complete_profile(request):
 
 
 
-def send_sms(mobile: str, text: str):
-    """
-    If SMS_API_KEY not set, fallback to print (dev).
-    Replace request details once panel docs are available.
-    """
-    api_key = getattr(settings, "SMS_API_KEY", "")
-    base = getattr(settings, "SMS_API_BASE_URL", "")
-    if not api_key or not base:
-        print(f"[SMS to {mobile}] {text}")
-        return
+logger = logging.getLogger(__name__)
 
-    # TODO: Replace with real provider endpoint/payload:
-    url = f"{base}/api/send"
+
+def format_mobile_e164(mobile: str) -> str:
+    """
+    Convert Iranian mobile to E.164 format.
+    09123456789 -> +989123456789
+    """
+    mobile = mobile.strip()
+
+    if mobile.startswith("09"):
+        return "+98" + mobile[1:]
+
+    if mobile.startswith("989"):
+        return "+" + mobile
+
+    if mobile.startswith("+989"):
+        return mobile
+
+    raise ValueError("Invalid mobile format")
+
+def send_sms(mobile: str, otp_code: str, retries: int = 2):
+    import requests
+    import logging
+    from time import sleep
+    from django.conf import settings
+
+    logger = logging.getLogger(__name__)
+
+    api_key = settings.SMS_API_KEY
+    base_url = "https://edge.ippanel.com/v1/api/send"
+    sender = settings.SMS_SENDER
+    pattern_code = settings.SMS_PATTERN_OTP
+
+    clean_mobile = mobile.replace("+98", "0") if mobile.startswith("+98") else mobile
+    clean_mobile = "+98" + clean_mobile.lstrip("0")
+
     payload = {
-        "to": mobile,
-        "message": text,
-        "sender": getattr(settings, "SMS_SENDER", ""),
+        "sending_type": "pattern",
+        "from_number": sender,
+        "code": pattern_code,
+        "recipients": [clean_mobile],
+        "params": {
+            "code": otp_code
+        }
     }
-    headers = {"Authorization": f"Bearer {api_key}"}
 
-    r = requests.post(url, json=payload, headers=headers, timeout=10)
-    r.raise_for_status()
+    headers = {
+        "Authorization": api_key,
+        "Content-Type": "application/json"
+    }
+
+    for _ in range(retries):
+        response = requests.post(base_url, json=payload, headers=headers, timeout=10)
+        print(f"IPPanel Response: {response.status_code} - {response.text}")
+
+        if response.status_code == 200:
+            return True
+
+        if response.status_code == 422:
+            logger.error("Invalid pattern or params: %s", response.text)
+            break
+
+        sleep(1)
+
+    return False
+
+
 
 
 class SignupOTPRequestView(APIView):
@@ -406,6 +454,15 @@ class SignupOTPRequestView(APIView):
             return Response({"detail": "Unable to send verification code."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Send SMS (your send_sms supports fallback to print)
-        send_sms(mobile, f"Your verification code is: {code}")
+        # ... کدهای قبلی ...
 
-        return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
+        # ارسال پیامک و چک کردن نتیجه
+        sms_status = send_sms(mobile, code)
+
+        if sms_status:
+            return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"detail": "Failed to send SMS. Please check server logs."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
