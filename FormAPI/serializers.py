@@ -154,7 +154,7 @@ class ResponseSerializer(serializers.ModelSerializer):
             "id" ,
             "submitted_at",
         ]
-        readonly_fields = fields
+        read_only_fields = fields
 
 
 #
@@ -180,7 +180,7 @@ class ResponseDetailSerializer(serializers.ModelSerializer):
             #"submitted_by",
             "field_responses",
         ]
-        readonly_fields = fields
+        read_only_fields = fields
 
 
 class FieldResponseSerializer(serializers.ModelSerializer):

@@ -9,6 +9,12 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from Form.models import *
 from . import serializers
+#### for getting excel
+from openpyxl import Workbook
+from django.http import HttpResponse
+from Form.models import FormModel
+
+
 
 # Create your views here.
 class FormListAPIView(APIView):
@@ -239,3 +245,78 @@ class SubmitAPIView(APIView):
             return Response({"response_id": response.id}, status=201)
 
         return Response(serializer.errors, status=400)
+
+
+    #  ########### changes for getting excel
+
+class ExportResponsesExcelAPIView(APIView):
+
+    def get(self, request, pk_f):
+
+        form = get_object_or_404(
+            FormModel.objects.prefetch_related(
+                "fields",
+                "responses__field_responses"
+            ),
+            pk=pk_f
+        )
+
+        fields = list(form.fields.all().order_by("order_index"))
+        responses = form.responses.all()
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Responses"
+
+        headers = ["response_id", "submitted_at"] + [f.label for f in fields]
+        ws.append(headers)
+
+        for response in responses:
+
+            field_map = {
+                fr.response_fields_id: fr
+                for fr in response.field_responses.all()
+            }
+
+            submitted = response.submitted_at
+            if submitted:
+                submitted = submitted.replace(tzinfo=None).isoformat(sep=" ")
+            row = [response.id, submitted]
+
+            for field in fields:
+
+                fr = field_map.get(field.id)
+                if not fr:
+                    row.append("")
+                    continue
+
+                value = fr.value
+
+
+                if field.field_type == "file":
+                    value = fr.uploaded_file.url if fr.uploaded_file else ""
+
+
+                elif isinstance(value, list):
+                    value = ", ".join(map(str, value))
+
+
+                elif hasattr(value, "isoformat"):
+                    value = value.isoformat()
+
+
+                elif isinstance(value, dict):
+                    import json
+                    value = json.dumps(value)
+
+                row.append(value)
+
+            ws.append(row)
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="form_{form.id}_responses.xlsx"'
+        wb.save(response)
+
+        return response
