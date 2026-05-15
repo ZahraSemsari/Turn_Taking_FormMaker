@@ -9,12 +9,24 @@ from django.utils.text import slugify
 from django.db import models
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.core.signing import Signer
+from .utils import encode_form_token
+
+
 
 class FormModel(models.Model):
     id = models.AutoField(primary_key=True)
     title = models.CharField(max_length=200, default="نام فرم")
     description = models.TextField(blank=True, null=True)
     # after creating the user
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="forms",
+        null=True,  # اگر موقتاً می‌خوای بدون کاربر هم کار کنه
+        blank=True,
+    )
     # created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=True)
     share_link = models.CharField(max_length=120)
@@ -36,11 +48,27 @@ class FormModel(models.Model):
         if not self.slug:
             self.slug = slugify(self.title , allow_unicode=True)
 
-        if not self.share_link:
-            self.share_link = f"/form/{self.slug}/"
+        
+        # باید بدون share_link اول ذخیره شود تا id داشته باشد
+        is_new = self.pk is None
 
 
         super().save(*args, **kwargs)
+
+        # اگر فرم تازه ساخته شده و share_link خالی است:
+        if is_new and not self.share_link:
+            if not self.created_by_id:
+                # اگر هنوز سیستم کاربری‌تون آماده نشده
+                # می‌تونی بعدا یک migration بزنی و این قسمت رو تغییر بدی
+                raise ValueError("created_by must be set before saving FormModel to generate share_link")
+
+            from .utils import encode_form_token
+            token = encode_form_token(self.created_by_id, self.id)
+            # اینجا فقط path را ذخیره می‌کنیم، یا اگر دوست داشتی full URL
+            self.share_link = f"/f/{token}/"
+
+            # دوباره ذخیره، این بار فقط share_link عوض شده
+            super().save(update_fields=["share_link"])
 
 
 class FieldModel(models.Model):

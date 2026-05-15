@@ -6,7 +6,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-
+from django.core import signing
+from rest_framework.exceptions import NotFound
+from Form.utils import decode_form_token
 from Form.models import *
 from . import serializers
 
@@ -18,11 +20,35 @@ class FormListAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        form_data = serializers.FormCreateUpdateSerializer(data=request.data)
-        if form_data.is_valid():
-            form_data.save()
-            return Response(form_data.data, status=status.HTTP_201_CREATED)
-        return Response(form_data.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = serializers.FormCreateUpdateSerializer(
+            data=request.data,
+            context={"request": request}
+        )
+        if serializer.is_valid():
+            form = serializer.save()
+            # اینجا form.share_link آماده است
+            from .serializers import FormDetailSerializer
+            output = FormDetailSerializer(form).data
+            return Response(output, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PublicFormView(APIView):
+    def get(self, request, token):
+        try:
+            data = decode_form_token(token)
+        except signing.BadSignature:
+            raise NotFound("Invalid link")
+
+        user_id = data.get("u")
+        form_id = data.get("f")
+
+        form = get_object_or_404(FormModel, pk=form_id, created_by_id=user_id, is_public=True)
+
+        serializer = serializers.FormDetailSerializer(form)
+        return Response(serializer.data)
+    
 
 
 class FormDetailsAPIView(APIView):

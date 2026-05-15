@@ -23,4 +23,5 @@ urlpatterns = [
     path("forms/<int:pk_f>/fields/<int:pk_field>/responses/", ResponseFieldListAPIView.as_view(), name="field-responses"),
 
     path("forms/<int:pk_f>/submit/", SubmitAPIView.as_view(), name="form-submit"),
+
 ]

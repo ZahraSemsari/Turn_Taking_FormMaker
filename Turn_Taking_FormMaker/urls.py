@@ -20,6 +20,7 @@ from django.urls import path
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from FormAPI.views import PublicFormView 
 
 
 urlpatterns = [
@@ -34,6 +35,8 @@ urlpatterns = [
         name="account_confirm_email",
     ),
 
-    path("api/" , include("FormAPI.urls"))
+    path("api/" , include("FormAPI.urls")),
+    path('f/<str:token>/', PublicFormView.as_view(), name="public-form"),
+    
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
