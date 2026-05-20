@@ -68,8 +68,11 @@ def register(request):
             email=user.email,
             defaults={"primary": True},
         )
-        if not email_address.verified:
+    if not email_address.verified:
+        try:
             email_address.send_confirmation(request, signup=False)
+        except Exception as e:
+            logger.error("Email confirmation failed for user %s: %s", user.id, str(e))
 
     # Profile completeness hint
     user_data = UserSerializer(user).data
@@ -292,6 +295,11 @@ def complete_profile(request):
     if mobile:
         if not mobile.isdigit() or len(mobile) != 11:
             return Response({"mobile": "Mobile must be 11 digits"}, status=400)
+        if User.objects.exclude(id=user.id).filter(mobile=mobile).exists():
+            return Response(
+                {"mobile": "Mobile already in use"},
+                status=400
+            )
         user.mobile = mobile
 
     # رمز (اجباری اگر قبلاً رمز نداشته)
@@ -382,7 +390,18 @@ def send_sms(mobile: str, otp_code: str, retries: int = 2):
     }
 
     for _ in range(retries):
-        response = requests.post(base_url, json=payload, headers=headers, timeout=10)
+        try:
+            response = requests.post(
+                base_url,
+                json=payload,
+                headers=headers,
+                timeout=10
+            )
+        except requests.RequestException as e:
+            logger.error("SMS sending failed: %s", str(e))
+            sleep(1)
+            continue
+
         print(f"IPPanel Response: {response.status_code} - {response.text}")
 
         if response.status_code == 200:

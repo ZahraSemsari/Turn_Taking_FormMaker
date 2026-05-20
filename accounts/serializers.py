@@ -61,7 +61,7 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
         user = self.user
 
         #-----------------compelete-profile------------------------
-        data["profile_incomplete"] = str( not user.mobile or not user.has_usable_password())
+        data["profile_incomplete"] = (not user.mobile or not user.has_usable_password())
 
         if user and user.email :
             email_qs = EmailAddress.objects.filter(
@@ -105,6 +105,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             )
         ],
     )
+
+    username = serializers.CharField(
+        validators=[
+            UniqueValidator(
+                queryset=User.objects.all(),
+                message="username already exists"
+            )
+        ]
+    )
+
 
     password = serializers.CharField(write_only=True, min_length=8)
     otp_code = serializers.CharField(write_only=True, required=True)
