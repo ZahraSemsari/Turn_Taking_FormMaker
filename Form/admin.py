@@ -26,6 +26,8 @@ class FormModelAdmin(admin.ModelAdmin):
         "slug": ("title",)
     }
 
+    readonly_fields = ("share_link",)
+
     inlines = [FieldModelInline]
 
 
