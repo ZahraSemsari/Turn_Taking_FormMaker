@@ -4,6 +4,7 @@ from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from allauth.account.models import EmailAddress
 from .models import PhoneOTP
+from django.db import transaction, IntegrityError
 
 
 User = get_user_model()
@@ -55,6 +56,10 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
 
         except User.DoesNotExist:
             pass
+
+        raw_username = self.initial_data.get("username")
+        if not isinstance(raw_username, str):
+            raise serializers.ValidationError({"username": "Username must be a string."})
 
         attrs[self.username_field] = username_value
         data = super().validate(attrs)
@@ -127,6 +132,41 @@ class RegisterSerializer(serializers.ModelSerializer):
             "email": {"required": False, "allow_null": True, "allow_blank": True},
         }
 
+
+    def validate_username(self, value):
+        """اعتبارسنجی username"""
+        if value is None:
+            raise serializers.ValidationError("Username is required.")
+        
+        value = str(value).strip()
+        
+        if not value:
+            raise serializers.ValidationError("Username cannot be empty.")
+        
+        if len(value) > 150:
+            raise serializers.ValidationError("Username must be less than 150 characters.")
+        
+        # چک کردن کاراکترهای مجاز
+        import re
+        if not re.match(r'^[\w.+-]+$', value):
+            raise serializers.ValidationError(
+                "Username may contain only letters, numbers, and @/./+/-/_ characters."
+            )
+        
+        # چک کردن case-insensitive برای uniqueness
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        
+        return value
+
+    def validate_email(self, value):
+        """اعتبارسنجی email - حذف فاصله‌های خالی"""
+        if value is not None:
+            value = str(value).strip()
+            if value == "":
+                return None
+        return value
+
     def validate_mobile(self, value):
         value = (value or "").strip()
         if not value:
@@ -174,11 +214,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         Note: otp_code is not stored in user model.
         """
         validated_data.pop("otp_code", None)
+        email = validated_data.pop("email", None)
+        if email == "":
+            email = None
 
-        user = User.objects.create_user(
-            username=validated_data["username"],
-            email=validated_data.get("email"),
-            mobile=validated_data["mobile"],
-            password=validated_data["password"],
-        )
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=validated_data["username"],
+                    email=email,
+                    mobile=validated_data["mobile"],
+                    password=validated_data["password"],
+                )
+        except IntegrityError:
+            raise serializers.ValidationError({
+                "detail": "Username or mobile already exists."
+            })
+        
         return user

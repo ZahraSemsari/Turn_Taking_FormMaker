@@ -68,11 +68,11 @@ def register(request):
             email=user.email,
             defaults={"primary": True},
         )
-    if not email_address.verified:
-        try:
-            email_address.send_confirmation(request, signup=False)
-        except Exception as e:
-            logger.error("Email confirmation failed for user %s: %s", user.id, str(e))
+        if not email_address.verified:
+            try:
+                email_address.send_confirmation(request, signup=False)
+            except Exception as e:
+                logger.error("Email confirmation failed for user %s: %s", user.id, str(e))
 
     # Profile completeness hint
     user_data = UserSerializer(user).data

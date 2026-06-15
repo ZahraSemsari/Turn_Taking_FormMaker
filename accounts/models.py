@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
-
+from django.core.validators import MinLengthValidator, MaxLengthValidator, RegexValidator
 
 mobile_validator = RegexValidator(
     regex=r"^\d{11}$",
@@ -61,6 +61,22 @@ class User(AbstractUser):
         null=True,
         blank=True,
 
+    )
+
+    username = models.CharField(
+        max_length=150,
+        unique=True,
+        validators=[
+            MinLengthValidator(1),
+            MaxLengthValidator(150),
+            RegexValidator(
+                regex=r'^[\w.+-]+$',
+                message='Enter a valid username. This value may contain only letters, numbers, and @/./+/-/_ characters.',
+            ),
+        ],
+        error_messages={
+            'unique': 'A user with that username already exists.',
+        },
     )
     
     #-----------------------profile-check------------------------------
