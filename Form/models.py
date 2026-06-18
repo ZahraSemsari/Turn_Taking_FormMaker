@@ -1,4 +1,6 @@
 # from django.contrib.auth.models import User
+from importlib.metadata import requires
+from .config_schema import default_config_for, validate_config_for_field
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.forms.fields import ChoiceField
@@ -7,12 +9,24 @@ from django.utils.text import slugify
 from django.db import models
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.core.signing import Signer
+from .utils import encode_form_token
+
+
 
 class FormModel(models.Model):
     id = models.AutoField(primary_key=True)
     title = models.CharField(max_length=200, default="نام فرم")
-    description = models.TextField()
+    description = models.TextField(blank=True, null=True)
     # after creating the user
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="forms",
+        null=True,  # اگر موقتاً می‌خوای بدون کاربر هم کار کنه
+        blank=True,
+    )
     # created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=True)
     share_link = models.CharField(max_length=120)
@@ -32,13 +46,29 @@ class FormModel(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.title)
+            self.slug = slugify(self.title , allow_unicode=True)
 
-        if not self.share_link:
-            self.share_link = f"/form/{self.slug}/"
+        
+        # باید بدون share_link اول ذخیره شود تا id داشته باشد
+        is_new = self.pk is None
 
 
         super().save(*args, **kwargs)
+
+        # اگر فرم تازه ساخته شده و share_link خالی است:
+        if is_new and not self.share_link:
+            if not self.created_by_id:
+                # اگر هنوز سیستم کاربری‌تون آماده نشده
+                # می‌تونی بعدا یک migration بزنی و این قسمت رو تغییر بدی
+                raise ValueError("created_by must be set before saving FormModel to generate share_link")
+
+            from .utils import encode_form_token
+            token = encode_form_token(self.created_by_id, self.id)
+            # اینجا فقط path را ذخیره می‌کنیم، یا اگر دوست داشتی full URL
+            self.share_link = f"/f/{token}/"
+
+            # دوباره ذخیره، این بار فقط share_link عوض شده
+            super().save(update_fields=["share_link"])
 
 
 class FieldModel(models.Model):
@@ -63,7 +93,7 @@ class FieldModel(models.Model):
 
     form = models.ForeignKey('FormModel', on_delete=models.CASCADE, related_name='fields')
     field_type = models.CharField(choices=field_name, max_length=20)
-    config = models.JSONField(default=dict) # this feature should come from the front
+    config = models.JSONField(default=dict,blank=True) # this feature should come from the front
     name = models.CharField(max_length=200 )
     label = models.CharField(max_length=200)
     order_index = models.IntegerField(default=0)
@@ -72,6 +102,16 @@ class FieldModel(models.Model):
 
     class Meta:
         unique_together = ('form', 'name')
+    
+    def clean(self):
+        super().clean()
+        if not self.config:
+            self.config = default_config_for(self.field_type)
+        validate_config_for_field(self.field_type, self.config)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class AllResponse(models.Model):
@@ -115,6 +155,7 @@ class FieldResponse(models.Model):
         blank=True,
         null=True,
     )
+    uploaded_file = models.FileField(upload_to="form_uploads/%Y/%m/%d/", null=True, blank=True)
 
 
     class Meta:
@@ -128,3 +169,5 @@ class FieldResponse(models.Model):
     def clean(self): # call this in the serializer
         if self.response.form.id != self.response_fields.form.id:
             raise ValidationError("this response is not related to this form ")
+
+

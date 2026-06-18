@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "dj_rest_auth.registration",
     "FormAPI.apps.FormapiConfig",
     "Form.apps.FormConfig",
+    "django_extensions",
 ]
 
 SITE_ID = 1
@@ -239,3 +240,9 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainSlidingSerializer",
     "SLIDING_TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer",
 }
+
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+

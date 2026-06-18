@@ -20,6 +20,9 @@ from django.urls import path
 from django.urls import path, include
 from accounts.views import PasswordResetConfirmEchoView
 
+from django.conf import settings
+from django.conf.urls.static import static
+from FormAPI.views import PublicFormView
 
 
 urlpatterns = [
@@ -30,16 +33,22 @@ urlpatterns = [
         ConfirmEmailView.as_view(),
         name="account_confirm_email",
     ),
-    path("auth/registration/account-confirm-email/<str:key>/",
-         ConfirmEmailView.as_view(),
-         name="dj_rest_auth_account_confirm_email"),
-    path("auth/", include("dj_rest_auth.urls")),
-    path("auth/registration/", include("dj_rest_auth.registration.urls")),
+
     path("api/" , include("FormAPI.urls")),
-    path(
-        "accounts/reset/<uidb64>/<token>/",
-        PasswordResetConfirmEchoView.as_view(),
-        name="password_reset_confirm",
-    ),
-]
+    path('f/<str:token>/', PublicFormView.as_view(), name="public-form"),
+
+  path("auth/registration/account-confirm-email/<str:key>/",
+       ConfirmEmailView.as_view(),
+       name="dj_rest_auth_account_confirm_email"),
+                  path("auth/", include("dj_rest_auth.urls")),
+                  path("auth/registration/", include("dj_rest_auth.registration.urls")),
+                  path(
+                      "accounts/reset/<uidb64>/<token>/",
+                      PasswordResetConfirmEchoView.as_view(),
+                      name="password_reset_confirm",
+                  ),
+
+              ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
 
