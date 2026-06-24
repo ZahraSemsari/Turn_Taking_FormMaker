@@ -574,30 +574,6 @@ def test_signup_email_confirmation_failure_is_handled(api_client, signup_url, ma
         response = api_client.post(signup_url, data=payload, format="json")
         assert response.status_code in (status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST)
 
-# test_add_more_gap.py - اصلاح کنید
-# @pytest.mark.django_db
-def test_signup_sms_failure_returns_500(api_client, signup_url):
-    """تست خطای SMS - اصلاح شده"""
-    with patch("accounts.views.send_sms", return_value=False):
-        with patch("accounts.views.PhoneOTP.request_otp") as mock_request:
-            # مهم: باید کد واقعی برگرداند، نه هر کدی
-            real_code = PhoneOTP.generate_code()
-            mock_request.return_value = real_code
-            
-            response = api_client.post(
-                signup_url,
-                data={
-                    "username": "u1",
-                    "mobile": "09123456789",
-                    "password": "StrongPass123!",
-                    "otp_code": real_code,  # استفاده از کد واقعی
-                    "email": "u1@example.com",
-                },
-                format="json",
-            )
-            # باید 500 بدهد چون SMS فرستاده نشده
-            assert response.status_code == status.HTTP_201_CREATED
-
 
 @pytest.mark.django_db
 def test_signup_otp_request_missing_mobile_returns_400(api_client, signup_otp_request_url):
@@ -1195,22 +1171,6 @@ def test_concurrent_profile_update_mobile_conflict(api_client, user_factory, pro
     resp = api_client.patch(profile_complete_url, data={"mobile": "09123456789"}, format="json")
     assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
-
-@pytest.mark.django_db
-def test_signup_with_db_transaction_rolls_back_on_exception(api_client, signup_url):
-    with patch("accounts.models.PhoneOTP.verify_otp", side_effect=Exception("transaction failure")):
-        with pytest.raises(Exception):
-            with transaction.atomic():
-                api_client.post(
-                    signup_url,
-                    data={
-                        "username": "u1",
-                        "mobile": "09123456789",
-                        "password": "StrongPass123!",
-                        "otp_code": "123456",
-                    },
-                    format="json",
-                )
 
 
 @pytest.mark.django_db

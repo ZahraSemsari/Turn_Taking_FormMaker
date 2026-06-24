@@ -17,6 +17,9 @@ from django.conf import settings
 from django.utils import timezone
 import logging
 from time import sleep
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+import re
 
 User = get_user_model()
 
@@ -76,7 +79,11 @@ def register(request):
 
     # Profile completeness hint
     user_data = UserSerializer(user).data
-    user_data["profile_incomplete"] = (not user.mobile or not user.has_usable_password())
+    user_data["profile_incomplete"] = (
+            not user.username
+            or not user.mobile
+            or not user.has_usable_password()
+    )
 
     return Response(user_data, status=status.HTTP_201_CREATED)
 
@@ -93,7 +100,9 @@ class GoogleLogin(SocialLoginView):
 
         #--------------compelete-profile---------------------------
         response.data["profile_incomplete"] = (
-            not user.mobile or not user.has_usable_password()
+                not user.username
+                or not user.mobile
+                or not user.has_usable_password()
         )
 
         return response
@@ -287,6 +296,33 @@ class PasswordResetOTPConfirmView(APIView):
 @permission_classes([IsAuthenticated])
 def complete_profile(request):
     user = request.user
+    username = request.data.get("username", None)
+
+    if username is None:
+        if not user.username:
+            return Response({"username": "Username is required"}, status=400)
+    else:
+        if not isinstance(username, str):
+            return Response({"username": "Username must be a string."}, status=400)
+
+        username = username.strip()
+
+        if not username:
+            return Response({"username": "Username is required"}, status=400)
+
+        if len(username) > 150:
+            return Response({"username": "Username must be less than 150 characters"}, status=400)
+
+        if not re.match(r'^[\w.+-]+$', username):
+            return Response(
+                {"username": "Username may contain only letters, numbers, and ./+/-/_ characters."},
+                status=400
+            )
+
+        if User.objects.exclude(id=user.id).filter(username__iexact=username).exists():
+            return Response({"username": "Username already exists"}, status=400)
+
+        user.username = username
 
     # موبایل (اجباری)
     mobile = request.data.get("mobile")
@@ -330,7 +366,11 @@ def complete_profile(request):
             "mobile": user.mobile,
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "profile_incomplete": (not user.mobile or not user.has_usable_password())
+            "profile_incomplete": (
+                not user.username
+                or not user.mobile
+                or not user.has_usable_password()
+            )
         }
     })
 
@@ -472,11 +512,14 @@ class SignupOTPRequestView(APIView):
 
             return Response({"detail": "Unable to send verification code."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Send SMS (your send_sms supports fallback to print)
-        # ... کدهای قبلی ...
-
-        # ارسال پیامک و چک کردن نتیجه
-        sms_status = send_sms(mobile, code)
+        try:
+            sms_status = send_sms(mobile, code)
+        except Exception as e:
+            logger.error("SMS sending crashed: %s", str(e))
+            return Response(
+                {"detail": "Failed to send SMS. Please check server logs."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         if sms_status:
             return Response({"detail": "Verification code sent."}, status=status.HTTP_200_OK)
@@ -485,3 +528,32 @@ class SignupOTPRequestView(APIView):
                 {"detail": "Failed to send SMS. Please check server logs."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+#-----------------------logout-------------------------
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        refresh_token = request.data.get("refresh")
+
+        if not refresh_token:
+            return Response(
+                {"refresh": "This field is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except TokenError:
+            return Response(
+                {"detail": "Invalid or expired refresh token."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {"detail": "Logout successful."},
+            status=status.HTTP_200_OK
+        )

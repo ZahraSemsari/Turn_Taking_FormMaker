@@ -9,6 +9,7 @@ from .views import (
     PasswordResetRequestView,
     SignupOTPRequestView,
     complete_profile,
+    LogoutView
 )
 
 
@@ -34,4 +35,7 @@ urlpatterns = [
     # User profile
     path("me/", views.GetUserInfo, name="users-me"),
     path("profile/complete/", complete_profile, name="users-profile-complete"),
+
+    #logout
+    path("logout/", LogoutView.as_view(), name="auth-logout"),
 ]

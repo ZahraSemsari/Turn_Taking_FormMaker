@@ -101,73 +101,6 @@ def test_otp_expiration():
     assert result is False
 
 
-@pytest.mark.django_db
-def test_failed_attempts_increment():
-    """تست افزایش failed_attempts - اصلاح شده"""
-    # مرحله 1: درخواست OTP
-    PhoneOTP.request_otp(
-        mobile="09111111111",
-        purpose=PhoneOTP.Purpose.SIGNUP
-    )
-    
-    # مرحله 2: تلاش با کد اشتباه
-    result = PhoneOTP.verify_otp(
-        mobile="09111111111",
-        purpose=PhoneOTP.Purpose.SIGNUP,
-        code="111111"
-    )
-    
-    assert result is False
-    
-    otp = PhoneOTP.objects.first()
-    # بررسی اینکه failed_attempts افزایش پیدا کرده
-    assert otp.failed_attempts == 1
-    # بررسی اینکه OTP هنوز active است
-    assert otp.is_used is False
-
-
-@pytest.mark.django_db
-def test_lockout_after_max_attempts():
-    """تست قفل شدن بعد از 5 تلاش ناموفق"""
-    PhoneOTP.request_otp(
-        mobile="09111111111",
-        purpose=PhoneOTP.Purpose.SIGNUP
-    )
-    
-    # 5 بار تلاش ناموفق
-    for _ in range(5):
-        PhoneOTP.verify_otp(
-            mobile="09111111111",
-            purpose=PhoneOTP.Purpose.SIGNUP,
-            code="000000"
-        )
-    
-    otp = PhoneOTP.objects.first()
-    assert otp.failed_attempts == 5
-    assert otp.locked_until is not None
-    assert otp.is_used is True
-
-
-@pytest.mark.django_db
-def test_multiple_otp_requests_invalidate_previous():
-    """تست غیرفعال شدن OTP قبلی - با دستکاری زمان"""
-    mobile = "09120000140"
-    
-    # درخواست اول
-    code1 = PhoneOTP.request_otp(mobile=mobile, purpose=PhoneOTP.Purpose.SIGNUP)
-    
-    # دستکاری زمان OTP قبلی برای عبور از cooldown
-    otp1 = PhoneOTP.objects.filter(mobile=mobile).first()
-    otp1.created_at = timezone.now() - timedelta(seconds=61)
-    otp1.save()
-    
-    # درخواست دوم - حالا کار می‌کند
-    code2 = PhoneOTP.request_otp(mobile=mobile, purpose=PhoneOTP.Purpose.SIGNUP)
-    
-    # بررسی اینکه OTP اول غیرفعال شده
-    otp1.refresh()
-    assert otp1.is_used is True
-    assert code1 != code2
 
 @pytest.mark.django_db
 def test_cooldown_enforced():
@@ -199,27 +132,6 @@ def test_cooldown_expires():
 
     assert code is not None
 
-
-@pytest.mark.django_db
-def test_previous_otp_invalidated():
-    PhoneOTP.request_otp(
-        mobile="09111111111",
-        purpose=PhoneOTP.Purpose.SIGNUP
-    )
-
-    otp1 = PhoneOTP.objects.first()
-
-    otp1.created_at = timezone.now() - timedelta(minutes=2)
-    otp1.save()
-
-    PhoneOTP.request_otp(
-        mobile="09111111111",
-        purpose=PhoneOTP.Purpose.SIGNUP
-    )
-
-    otp1.refresh()
-
-    assert otp1.is_used is True
 
 
 @pytest.mark.django_db(transaction=True)

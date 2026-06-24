@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.core.validators import MinLengthValidator, MaxLengthValidator, RegexValidator
+from django.db import transaction, IntegrityError
+from django.db.models import Q
+
 
 mobile_validator = RegexValidator(
     regex=r"^\d{11}$",
@@ -13,12 +16,11 @@ class UserManager(BaseUserManager):
     use_in_migrations = True
 
     def _create_user(self, username, email, mobile, password, **extra_fields):
+        username = (username or "").strip()
         if not username:
             raise ValueError("Username is required")
         # if not mobile:
         #     raise ValueError("Mobile is required")
-
-
         email = self.normalize_email(email) if email else None
         if mobile:
             mobile = str(mobile).strip().replace(" ", "")
@@ -71,7 +73,7 @@ class User(AbstractUser):
             MaxLengthValidator(150),
             RegexValidator(
                 regex=r'^[\w.+-]+$',
-                message='Enter a valid username. This value may contain only letters, numbers, and @/./+/-/_ characters.',
+                message='Enter a valid username. This value may contain only letters, numbers, and ./+/-/_ characters.',
             ),
         ],
         error_messages={
@@ -126,6 +128,13 @@ class PhoneOTP(models.Model):
         indexes = [
             models.Index(fields=["mobile", "purpose", "-created_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["mobile", "purpose"],
+                condition=Q(is_used=False),
+                name="unique_unused_otp_per_mobile_purpose",
+            )
+        ]
 
     @staticmethod
     def generate_code() -> str:
@@ -147,49 +156,54 @@ class PhoneOTP(models.Model):
 
     @classmethod
     def request_otp(
-        cls,
-        *,
-        mobile: str,
-        purpose: str,
-        minutes: int = 5,
-        cooldown_seconds: int = 60,
-        max_attempts: int = 5,
-        lock_minutes: int = 10,
+            cls,
+            *,
+            mobile: str,
+            purpose: str,
+            minutes: int = 5,
+            cooldown_seconds: int = 60,
+            max_attempts: int = 5,
+            lock_minutes: int = 10,
     ) -> str:
-        """
-        Creates a new OTP and returns the raw code (ONLY to send via SMS).
-        Stores only a hash in DB.
-        Enforces:
-        - lockout window
-        - cooldown/rate limit
-        - invalidates previous active OTPs
-        """
         now = cls._now()
 
-        latest = cls.objects.filter(mobile=mobile, purpose=purpose).order_by("-created_at").first()
-        if latest and latest.locked_until and latest.locked_until > now:
-            remaining = int((latest.locked_until - now).total_seconds())
-            raise ValueError(f"locked:{remaining}")
+        try:
+            with transaction.atomic():
+                latest = cls.objects.filter(
+                    mobile=mobile,
+                    purpose=purpose,
+                ).order_by("-created_at").first()
 
-        # rate limit: 1 per cooldown_seconds
-        if latest and (now - latest.created_at).total_seconds() < cooldown_seconds:
-            remaining = int(cooldown_seconds - (now - latest.created_at).total_seconds())
-            raise ValueError(f"cooldown:{remaining}")
+                if latest and latest.locked_until and latest.locked_until > now:
+                    remaining = int((latest.locked_until - now).total_seconds())
+                    raise ValueError(f"locked:{remaining}")
 
-        # invalidate previous active OTPs (so only 1 valid at a time)
-        cls._active_qs(mobile, purpose).update(is_used=True)
+                if latest and (now - latest.created_at).total_seconds() < cooldown_seconds:
+                    remaining = int(cooldown_seconds - (now - latest.created_at).total_seconds())
+                    raise ValueError(f"cooldown:{remaining}")
 
-        code = cls.generate_code()
-        cls.objects.create(
-            mobile=mobile,
-            purpose=purpose,
-            code_hash=make_password(code),
-            expires_at=now + timedelta(minutes=minutes),
-            is_used=False,
-            failed_attempts=0,
-            locked_until=None,
-        )
-        return code
+                cls.objects.filter(
+                    mobile=mobile,
+                    purpose=purpose,
+                    is_used=False,
+                ).update(is_used=True)
+
+                code = cls.generate_code()
+
+                cls.objects.create(
+                    mobile=mobile,
+                    purpose=purpose,
+                    code_hash=make_password(code),
+                    expires_at=now + timedelta(minutes=minutes),
+                    is_used=False,
+                    failed_attempts=0,
+                    locked_until=None,
+                )
+
+                return code
+
+        except IntegrityError:
+            raise ValueError(f"cooldown:{cooldown_seconds}")
 
     @classmethod
     def verify_otp(

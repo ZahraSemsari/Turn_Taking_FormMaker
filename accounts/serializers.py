@@ -5,7 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from allauth.account.models import EmailAddress
 from .models import PhoneOTP
 from django.db import transaction, IntegrityError
-
+import re
 
 User = get_user_model()
 
@@ -57,16 +57,17 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
         except User.DoesNotExist:
             pass
 
-        raw_username = self.initial_data.get("username")
-        if not isinstance(raw_username, str):
-            raise serializers.ValidationError({"username": "Username must be a string."})
 
         attrs[self.username_field] = username_value
         data = super().validate(attrs)
         user = self.user
 
         #-----------------compelete-profile------------------------
-        data["profile_incomplete"] = (not user.mobile or not user.has_usable_password())
+        data["profile_incomplete"] = (
+                not user.username
+                or not user.mobile
+                or not user.has_usable_password()
+        )
 
         if user and user.email :
             email_qs = EmailAddress.objects.filter(
@@ -112,12 +113,10 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
 
     username = serializers.CharField(
-        validators=[
-            UniqueValidator(
-                queryset=User.objects.all(),
-                message="username already exists"
-            )
-        ]
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        max_length=150,
     )
 
 
@@ -128,39 +127,37 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ("id", "username", "email", "mobile", "password", "otp_code")
         extra_kwargs = {
+            "username": {"required": True, "allow_blank": False},
             "mobile": {"required": True},
             "email": {"required": False, "allow_null": True, "allow_blank": True},
         }
 
-
     def validate_username(self, value):
-        """اعتبارسنجی username"""
-        if value is None:
-            raise serializers.ValidationError("Username is required.")
-        
-        value = str(value).strip()
-        
+        value = (value or "").strip()
+
         if not value:
-            raise serializers.ValidationError("Username cannot be empty.")
-        
+            raise serializers.ValidationError("Username is required.")
+
         if len(value) > 150:
             raise serializers.ValidationError("Username must be less than 150 characters.")
-        
-        # چک کردن کاراکترهای مجاز
-        import re
+
         if not re.match(r'^[\w.+-]+$', value):
             raise serializers.ValidationError(
-                "Username may contain only letters, numbers, and @/./+/-/_ characters."
+                "Username may contain only letters, numbers, and ./+/-/_ characters."
             )
-        
-        # چک کردن case-insensitive برای uniqueness
+
         if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("A user with that username already exists.")
-        
+
         return value
 
     def validate_email(self, value):
-        """اعتبارسنجی email - حذف فاصله‌های خالی"""
+        raw_email = self.initial_data.get("email", None)
+
+        if isinstance(raw_email, str) and raw_email != "" and raw_email.strip() == "":
+            raise serializers.ValidationError({
+                "email": "Email cannot be whitespace only."
+            })
         if value is not None:
             value = str(value).strip()
             if value == "":
@@ -186,20 +183,33 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        raw_username = self.initial_data.get("username", None)
+
+        if not isinstance(raw_username, str):
+            raise serializers.ValidationError({
+                "username": "Username must be a string."
+            })
+
         """
         Verify OTP before allowing user creation.
         OTP is consumed (marked used) only if it is valid.
         """
+
         mobile = attrs.get("mobile")
         otp_code = attrs.get("otp_code")
 
-        is_valid = PhoneOTP.verify_otp(
-            mobile=mobile,
-            purpose=PhoneOTP.Purpose.SIGNUP,
-            code=otp_code,
-            max_attempts=5,
-            lock_minutes=10,
-        )
+        try:
+            is_valid = PhoneOTP.verify_otp(
+                mobile=mobile,
+                purpose=PhoneOTP.Purpose.SIGNUP,
+                code=otp_code,
+                max_attempts=5,
+                lock_minutes=10,
+            )
+        except Exception:
+            raise serializers.ValidationError({
+                "otp_code": "Unable to verify OTP."
+            })
 
         if not is_valid:
             raise serializers.ValidationError(

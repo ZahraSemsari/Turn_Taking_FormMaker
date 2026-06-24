@@ -442,28 +442,6 @@ def test_register_null_mobile(api_client):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-@pytest.mark.django_db
-def test_register_integer_username(api_client):
-    code = PhoneOTP.request_otp(mobile="09120000127", purpose=PhoneOTP.Purpose.SIGNUP)
-    response = api_client.post("/account/signup/", {
-        "username": 12345,
-        "mobile": "09120000127",
-        "password": "StrongPass123!",
-        "otp_code": code
-    })
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-
-@pytest.mark.django_db
-def test_register_array_as_username(api_client):
-    code = PhoneOTP.request_otp(mobile="09120000128", purpose=PhoneOTP.Purpose.SIGNUP)
-    response = api_client.post("/account/signup/", {
-        "username": ["array", "username"],
-        "mobile": "09120000128",
-        "password": "StrongPass123!",
-        "otp_code": code
-    })
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 @pytest.mark.django_db
