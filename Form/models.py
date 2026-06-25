@@ -24,12 +24,10 @@ class FormModel(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="forms",
-        null=True,  # اگر موقتاً می‌خوای بدون کاربر هم کار کنه
-        blank=True,
     )
     # created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=True)
-    share_link = models.CharField(max_length=120)
+    share_link = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     slug = models.SlugField(unique=True)

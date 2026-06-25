@@ -16,7 +16,8 @@ class FormListSerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "created_at",
-            "share_link"
+            "share_link",
+            "created_by",
         ]
         read_only_fields = fields
 
@@ -91,9 +92,9 @@ class FieldSerializer(serializers.ModelSerializer):
 
         return attrs
 
-
 class FormDetailSerializer(serializers.ModelSerializer):
     fields = FieldSerializer(many=True)
+    created_by = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = FormModel
@@ -104,6 +105,7 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "is_public",
             "share_link",
             "slug",
+            "created_by",
             "created_at",
             "updated_at",
             "fields",
@@ -112,10 +114,10 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "id",
             "share_link",
             "slug",
+            "created_by",
             "created_at",
             "updated_at",
         ]
-
     @transaction.atomic
     def update(self, instance, validated_data):
         fields_were_sent = "fields" in validated_data

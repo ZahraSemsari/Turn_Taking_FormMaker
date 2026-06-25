@@ -15,14 +15,28 @@ from . import serializers
 from openpyxl import Workbook
 from django.http import HttpResponse
 from Form.models import FormModel
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
+def get_owned_form_or_404(request, pk):
+    return get_object_or_404(FormModel, pk=pk, created_by=request.user)
+
+def get_owned_form_or_404(request, pk):
+    return get_object_or_404(
+        FormModel,
+        pk=pk,
+        created_by=request.user
+    )
+
 
 
 
 # Create your views here.
 class FormListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-        form_data = FormModel.objects.all()
-        serializer = serializers.FormListSerializer(form_data , many=True)
+        form_data = FormModel.objects.filter(created_by=request.user)
+        serializer = serializers.FormListSerializer(form_data, many=True)
         return Response(serializer.data)
 
     def post(self, request):
@@ -30,15 +44,13 @@ class FormListAPIView(APIView):
             data=request.data,
             context={"request": request}
         )
+
         if serializer.is_valid():
             form = serializer.save()
-            # اینجا form.share_link آماده است
-            from .serializers import FormDetailSerializer
-            output = FormDetailSerializer(form).data
+            output = serializers.FormDetailSerializer(form).data
             return Response(output, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 class PublicFormView(APIView):
     def get(self, request, token):
@@ -58,47 +70,58 @@ class PublicFormView(APIView):
 
 
 class FormDetailsAPIView(APIView):
-    def get_object(self, pk):
-        try:
-            return FormModel.objects.get(pk=pk)
-        except FormModel.DoesNotExist:
-            raise Http404
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk):
+        return get_owned_form_or_404(request, pk)
 
     def get(self, request, pk):
-        form_data = self.get_object(pk)
+        form_data = self.get_object(request, pk)
         serializer = serializers.FormDetailSerializer(form_data)
         return Response(serializer.data)
 
-    def delete(self, request , pk):
-        form_data = self.get_object(pk)
+    def delete(self, request, pk):
+        form_data = self.get_object(request, pk)
         form_data.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    def patch(self , request , pk):
-        form_data = self.get_object(pk)
-        # serializer = serializers.FormCreateUpdateSerializer(form_data, data=request.data, partial=True)
-        serializer = serializers.FormDetailSerializer(form_data, data=request.data, partial=True)
+    def patch(self, request, pk):
+        form_data = self.get_object(request, pk)
+        serializer = serializers.FormDetailSerializer(
+            form_data,
+            data=request.data,
+            partial=True
+        )
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class FieldListAPIView(APIView):
-    def get(self, request , pk_f ):
-        field_data = FieldModel.objects.filter(form_id=pk_f)
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk_f):
+        form = get_owned_form_or_404(request, pk_f)
+        field_data = FieldModel.objects.filter(form=form)
         serializer = serializers.FieldSerializer(field_data, many=True)
         return Response(serializer.data)
 
+    def post(self, request, pk_f):
+        form = get_owned_form_or_404(request, pk_f)
 
-    def post(self, request , pk_f):
-        serializer = serializers.FieldSerializer(data=request.data , many=True)
+        serializer = serializers.FieldSerializer(data=request.data, many=True)
+
         if serializer.is_valid():
-            serializer.save(form=FormModel.objects.get(pk=pk_f))
-            return Response(serializer.data)
+            serializer.save(form=form)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk_f):
+        form = get_owned_form_or_404(request, pk_f)
+
         fields_data = request.data
 
         if not isinstance(fields_data, list):
@@ -106,8 +129,6 @@ class FieldListAPIView(APIView):
                 {"detail": "fields must be a list"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        form = get_object_or_404(FormModel, pk=pk_f)
 
         existing_fields = {
             field.id: field for field in form.fields.all()
@@ -119,7 +140,6 @@ class FieldListAPIView(APIView):
             field_id = field_data.get("id")
 
             if field_id and field_id in existing_fields:
-                # update
                 field_obj = existing_fields[field_id]
                 serializer = serializers.FieldSerializer(
                     field_obj,
@@ -131,7 +151,6 @@ class FieldListAPIView(APIView):
                 updated_ids.append(field_id)
 
             else:
-                # create
                 serializer = serializers.FieldSerializer(data=field_data)
                 serializer.is_valid(raise_exception=True)
                 serializer.save(form=form)
@@ -139,35 +158,53 @@ class FieldListAPIView(APIView):
 
         return Response({"updated_fields": updated_ids})
 
-class FieldDetailsAPIView(APIView):
-    def get_object(self, pk_f ,pk ):
-        try:
-            return FieldModel.objects.get(form_id=pk_f, pk=pk)
-        except FieldModel.DoesNotExist:
-            raise Http404
 
-    def get(self, request, pk_f ,pk):
-        field_data = self.get_object( pk_f ,pk)
+
+
+class FieldDetailsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk_f, pk):
+        return get_object_or_404(
+            FieldModel,
+            form_id=pk_f,
+            pk=pk,
+            form__created_by=request.user
+        )
+
+    def get(self, request, pk_f, pk):
+        field_data = self.get_object(request, pk_f, pk)
         serializer = serializers.FieldSerializer(field_data)
         return Response(serializer.data)
 
-    def delete(self, request , pk_f ,pk):
-        field_data = self.get_object(pk_f ,pk)
+    def delete(self, request, pk_f, pk):
+        field_data = self.get_object(request, pk_f, pk)
         field_data.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    def patch(self, request , pk_f ,pk):
-        field_data = self.get_object(pk_f ,pk)
-        serializer = serializers.FieldSerializer(field_data, data=request.data , partial=True)
+    def patch(self, request, pk_f, pk):
+        field_data = self.get_object(request, pk_f, pk)
+        serializer = serializers.FieldSerializer(
+            field_data,
+            data=request.data,
+            partial=True
+        )
+
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
 class ResponseListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, pk_f):
-        response_data = AllResponse.objects.filter(form_id=pk_f)
+        form = get_owned_form_or_404(request, pk_f)
+
+        response_data = AllResponse.objects.filter(form=form)
         answers = response_data.count()
 
         response_serializer = serializers.ResponseSerializer(response_data, many=True)
@@ -186,42 +223,36 @@ class ResponseListAPIView(APIView):
 
 
 class ResponseDetailAPIView(APIView):
-    def get_object(self , pk_f , pk):
-        try :
-            response_data = AllResponse.objects.get(form_id=pk_f, pk=pk)
-        except AllResponse.DoesNotExist:
-            raise Http404
-        return response_data
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, pk_f, pk):
+        return get_object_or_404(
+            AllResponse,
+            form_id=pk_f,
+            pk=pk,
+            form__created_by=request.user
+        )
 
     def get(self, request, pk_f, pk):
-        response_data = self.get_object(pk_f, pk)
-
-        form_id = response_data.form_id
-
-
+        response_data = self.get_object(request, pk_f, pk)
         response_serializer = serializers.ResponseDetailSerializer(response_data)
-
-
         return Response(response_serializer.data)
-
-
-    # def delete(self, request , pk_f , pk):
-    #     response_data = self.get_object( pk_f , pk)
-    #     response_data.delete()
-    #     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 
 class ResponseFieldListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, pk_f, pk_field):
+        form = get_owned_form_or_404(request, pk_f)
+
         responses = FieldResponse.objects.filter(
-            response__form_id=pk_f,
+            response__form=form,
             response_fields_id=pk_field
         )
 
         serializer = serializers.ResponseFieldSerializer(responses, many=True)
         return Response(serializer.data)
-
 
 
 # class SubmitAPIView(APIView):
@@ -242,15 +273,17 @@ class ResponseFieldListAPIView(APIView):
 
 
 
-
 class SubmitAPIView(APIView):
+    permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request, pk_f):
+        form = get_object_or_404(FormModel, pk=pk_f, is_public=True)
+
         data = request.data
 
-        # اگر field_responses به صورت string (در multipart) آمده باشد، آن را JSON parse کن
         field_responses_raw = data.get("field_responses")
+
         if isinstance(field_responses_raw, str):
             try:
                 parsed = json.loads(field_responses_raw)
@@ -263,28 +296,27 @@ class SubmitAPIView(APIView):
 
         serializer = serializers.SubmitSerializer(
             data=data,
-            context={"form_id": pk_f, "request": request}
+            context={"form_id": form.id, "request": request}
         )
 
         if serializer.is_valid():
             response = serializer.save()
-            return Response({"response_id": response.id}, status=201)
+            return Response({"response_id": response.id}, status=status.HTTP_201_CREATED)
 
-        return Response(serializer.errors, status=400)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-    #  ########### changes for getting excel
 
 class ExportResponsesExcelAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk_f):
-
         form = get_object_or_404(
             FormModel.objects.prefetch_related(
                 "fields",
                 "responses__field_responses"
             ),
-            pk=pk_f
+            pk=pk_f,
+            created_by=request.user
         )
 
         fields = list(form.fields.all().order_by("order_index"))
@@ -297,42 +329,37 @@ class ExportResponsesExcelAPIView(APIView):
         headers = ["response_id", "submitted_at"] + [f.label for f in fields]
         ws.append(headers)
 
-        for response in responses:
-
+        for response_obj in responses:
             field_map = {
                 fr.response_fields_id: fr
-                for fr in response.field_responses.all()
+                for fr in response_obj.field_responses.all()
             }
 
-            submitted = response.submitted_at
+            submitted = response_obj.submitted_at
             if submitted:
                 submitted = submitted.replace(tzinfo=None).isoformat(sep=" ")
-            row = [response.id, submitted]
+
+            row = [response_obj.id, submitted]
 
             for field in fields:
-
                 fr = field_map.get(field.id)
+
                 if not fr:
                     row.append("")
                     continue
 
                 value = fr.value
 
-
                 if field.field_type == "file":
                     value = fr.uploaded_file.url if fr.uploaded_file else ""
-
 
                 elif isinstance(value, list):
                     value = ", ".join(map(str, value))
 
-
                 elif hasattr(value, "isoformat"):
                     value = value.isoformat()
 
-
                 elif isinstance(value, dict):
-                    import json
                     value = json.dumps(value)
 
                 row.append(value)
