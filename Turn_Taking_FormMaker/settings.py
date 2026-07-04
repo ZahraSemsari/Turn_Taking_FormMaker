@@ -30,8 +30,10 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 
-# Application definition
 
+# Core Django and third-party apps required by the project.
+# Includes Django REST Framework, JWT authentication, allauth/dj-rest-auth,
+# form apps, Swagger documentation, and development extensions.
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -58,6 +60,7 @@ INSTALLED_APPS = [
 
 SITE_ID = 1
 
+# Custom user model used by the accounts app.
 AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
@@ -134,7 +137,8 @@ USE_I18N = True
 USE_TZ = True
 
 # settings.py
-
+# SMS provider configuration used for OTP delivery.
+# In production, these values should be read from environment variables.
 SMS_PROVIDER = "ippanel"
 SMS_API_BASE_URL = "https://edge.ippanel.com/v1/api/send"
 SMS_API_KEY = "YTFhYWRiZDctZGVlYi00ZjUzLTk3YmEtY2NjODkzYzM3OWYzOTczNjBiMjI5OTJjOGRmYTc2YjNhYjgwODQ0M2Q3YzY="
@@ -150,6 +154,9 @@ OTP_SMS_RETRIES = 2
 
 STATIC_URL = 'static/'
 
+# Authentication backends.
+# ModelBackend handles normal username/password login.
+# allauth backend handles social authentication flows.
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
     "allauth.account.auth_backends.AuthenticationBackend",
@@ -187,6 +194,8 @@ FRONTEND_URL = "http://127.0.0.1:8000"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Django REST Framework authentication configuration.
+# All protected API endpoints expect JWT Bearer tokens by default.
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -199,6 +208,9 @@ REST_FRAMEWORK = {
 
 from datetime import timedelta
 
+# SimpleJWT configuration.
+# Controls access/refresh token lifetime, rotation, blacklist behavior,
+# and the custom token serializer used for login.
 SIMPLE_JWT = {
     #change it please!!!!!!
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
@@ -241,7 +253,7 @@ SIMPLE_JWT = {
     "SLIDING_TOKEN_REFRESH_SERIALIZER": "rest_framework_simplejwt.serializers.TokenRefreshSlidingSerializer",
 }
 
-
+# Media configuration for uploaded form files.
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 

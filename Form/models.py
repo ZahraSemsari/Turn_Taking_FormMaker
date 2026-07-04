@@ -16,6 +16,13 @@ from .utils import encode_form_token
 
 
 class FormModel(models.Model):
+    """
+    Represents a form created by a user.
+
+    Each form can contain multiple fields and multiple submitted responses.
+    A secure share_link is generated after creation so public users can submit it.
+    """
+
     id = models.AutoField(primary_key=True)
     title = models.CharField(max_length=200, default="نام فرم")
     description = models.TextField(blank=True, null=True)
@@ -40,9 +47,20 @@ class FormModel(models.Model):
     def str(self):
         return self.title
     def get_absolute_url(self):
+        """
+        Return the internal detail URL for this form.
+        """
         return reverse('Form:detail', args=[self.id])
 
     def save(self, *args, **kwargs):
+        """
+        Save the form and generate its secure share link when needed.
+
+        Why two saves are used:
+        - The form must first be saved to get an id.
+        - Then user_id and form_id are signed into a public token.
+        - Finally share_link is updated with /f/<token>/.
+        """
         if not self.slug:
             self.slug = slugify(self.title , allow_unicode=True)
 
@@ -70,6 +88,13 @@ class FormModel(models.Model):
 
 
 class FieldModel(models.Model):
+    """
+    Represents a single field inside a form.
+
+    field_type defines the kind of input.
+    config stores field-specific validation options such as choices,
+    min/max values, regex, file limits, and default values.
+    """
     field_name = [
         ('text' , 'متن'),
         ('number' , 'عدد'),
@@ -99,21 +124,39 @@ class FieldModel(models.Model):
     description = models.TextField(blank=True, null=True)
 
     class Meta:
+        # A field name must be unique only inside the same form.
+        # Different forms may use the same field name.
         unique_together = ('form', 'name')
     
     def clean(self):
+        """
+        Validate field config before saving.
+
+        If config is empty, default config is applied based on field_type.
+        Then config keys and required values are validated by config_schema.
+        """
         super().clean()
         if not self.config:
             self.config = default_config_for(self.field_type)
         validate_config_for_field(self.field_type, self.config)
 
     def save(self, *args, **kwargs):
+        """
+        Run full model validation before saving the field.
+
+        This guarantees config validation is applied even when fields
+        are created directly through ORM or admin.
+        """
         self.full_clean()
         return super().save(*args, **kwargs)
 
 
 class AllResponse(models.Model):
+    """
+    Represents one submitted response for a form.
 
+    The actual answers are stored in related FieldResponse records.
+    """
     form = models.ForeignKey(
         'FormModel',
         on_delete=models.CASCADE,
@@ -136,6 +179,12 @@ class AllResponse(models.Model):
 
 
 class FieldResponse(models.Model):
+    """
+    Represents one answer for one field inside a submitted form response.
+
+    Regular answers are stored in value as JSON.
+    File answers are stored in uploaded_file.
+    """
     response = models.ForeignKey(
         'AllResponse',
         on_delete=models.CASCADE,
@@ -164,7 +213,12 @@ class FieldResponse(models.Model):
         return f"{self.response_fields} : {self.value}"
 
 
-    def clean(self): # call this in the serializer
+    def clean(self):
+        """
+        Ensure this field answer belongs to the same form as the response.
+
+        This prevents attaching an answer from Form A to a response of Form B.
+        """
         if self.response.form.id != self.response_fields.form.id:
             raise ValidationError("this response is not related to this form ")
 

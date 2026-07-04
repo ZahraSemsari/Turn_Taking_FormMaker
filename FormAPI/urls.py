@@ -11,6 +11,10 @@ from .views import (
     ExportResponsesExcelAPIView
 )
 
+
+# Form API routes.
+# Includes form CRUD, field CRUD, response listing/detail,
+# public form submission, and Excel export.
 urlpatterns = [
     path("forms/", FormListAPIView.as_view(), name="form-list"),
     path("forms/<int:pk>/", FormDetailsAPIView.as_view(), name="form-detail"),
