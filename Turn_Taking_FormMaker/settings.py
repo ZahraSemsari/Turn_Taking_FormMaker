@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -22,7 +26,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-z*-!^&dc@slg(z=hahqv66q*epbu$kdsl-x00n0q*^#k8#-i2='
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -137,9 +141,9 @@ USE_TZ = True
 
 SMS_PROVIDER = "ippanel"
 SMS_API_BASE_URL = "https://edge.ippanel.com/v1/api/send"
-SMS_API_KEY = "YTFhYWRiZDctZGVlYi00ZjUzLTk3YmEtY2NjODkzYzM3OWYzOTczNjBiMjI5OTJjOGRmYTc2YjNhYjgwODQ0M2Q3YzY="
-SMS_SENDER = "+983000505"
-SMS_PATTERN_OTP = "zfrt8xouasi8bf2"
+SMS_API_KEY = os.getenv("SMS_API_KEY")
+SMS_SENDER = os.getenv("SMS_SENDER", "+983000505")
+SMS_PATTERN_OTP = os.getenv("SMS_PATTERN_OTP")
 OTP_LENGTH = 6
 OTP_EXPIRE_SECONDS = 120
 OTP_SMS_RETRIES = 2
@@ -157,7 +161,7 @@ AUTHENTICATION_BACKENDS = [
 
 ACCOUNT_LOGIN_METHODS = {"username", "email"}
 ACCOUNT_EMAIL_VERIFICATION = "optional"
-ACCOUNT_SIGNUP_FIELDS = ["username*", "password1*", "password2*", "email"]
+ACCOUNT_SIGNUP_FIELDS = ["username*", "email", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
 
 
@@ -175,8 +179,8 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 
 DEFAULT_FROM_EMAIL = "Turn_Taking_FormMaker"
-EMAIL_HOST_USER = "fmohammadi22384@gmail.com"
-EMAIL_HOST_PASSWORD = "fefwixvzgqerzzat"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 
 ACCOUNT_CONFIRM_EMAIL_ON_GET = False
 
@@ -190,7 +194,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '10000/day',
+        'user': '10000/day',
+        'auth_login': '5/min',
+        'password_reset': '3/min',
+        'password_reset_confirm': '5/min',
+        'signup_otp': '3/min',
+    },
 }
 
 
@@ -201,7 +218,7 @@ from datetime import timedelta
 
 SIMPLE_JWT = {
     #change it please!!!!!!
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,

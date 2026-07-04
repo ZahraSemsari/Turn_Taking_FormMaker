@@ -12,14 +12,13 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-import requests
-from django.conf import settings
-from django.utils import timezone
 import logging
-from time import sleep
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 import re
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from .throttles import LoginRateThrottle
 
 User = get_user_model()
 
@@ -42,6 +41,7 @@ def GetUserInfo(request):
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailOrUsernameOrMobileTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -278,6 +278,14 @@ class PasswordResetOTPConfirmView(APIView):
                 {"detail": "Invalid or expired verification code."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response(
+                {"new_password": list(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )       
 
         # Update user's password
         user.set_password(new_password)

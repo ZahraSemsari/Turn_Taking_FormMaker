@@ -5,6 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from allauth.account.models import EmailAddress
 from .models import PhoneOTP
 from django.db import transaction, IntegrityError
+from rest_framework.exceptions import AuthenticationFailed
 import re
 
 User = get_user_model()
@@ -69,15 +70,16 @@ class EmailOrUsernameOrMobileTokenObtainPairSerializer(TokenObtainPairSerializer
                 or not user.has_usable_password()
         )
 
-        if user and user.email :
+        if user and user.email:
             email_qs = EmailAddress.objects.filter(
                 user=user,
                 email__iexact=user.email,
                 verified=True,
             )
             if not email_qs.exists():
-                raise serializers.ValidationError(
-                    "Email address is not verified ; please check your email and click the confirmation link"
+                raise AuthenticationFailed(
+                    self.error_messages["no_active_account"],
+                    code="no_active_account",
                 )
 
         data["user"] = UserSerializer(self.user).data
