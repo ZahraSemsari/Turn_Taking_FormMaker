@@ -9,6 +9,11 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 
 class FormListSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer for listing user's forms.
+
+    Used by the form list endpoint to return lightweight form data.
+    """
     class Meta:
         model = FormModel
         fields = [
@@ -16,12 +21,19 @@ class FormListSerializer(serializers.ModelSerializer):
             "title",
             "slug",
             "created_at",
-            "share_link"
+            "share_link",
+            "created_by",
         ]
         read_only_fields = fields
 
 
 class FormCreateUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating and updating basic form metadata.
+
+    The authenticated request user is automatically assigned as created_by
+    during form creation.
+    """
     class Meta:
         model = FormModel
         fields = [
@@ -32,6 +44,11 @@ class FormCreateUpdateSerializer(serializers.ModelSerializer):
 
 
     def create(self, validated_data):
+        """
+        Create a form for the authenticated user.
+
+        Anonymous users are not allowed to create forms.
+        """
         request = self.context.get("request")
         user = getattr(request, "user", None)
         if user and user.is_authenticated:
@@ -54,6 +71,12 @@ class FormCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class FieldSerializer(serializers.ModelSerializer):
+    """
+    Serializer for form fields.
+
+    Supports both creating new fields and updating existing fields.
+    The optional id field is used during nested/bulk updates.
+    """
     id = serializers.IntegerField(required=False)
 
     class Meta:
@@ -74,6 +97,12 @@ class FieldSerializer(serializers.ModelSerializer):
 
 
     def validate(self, attrs):
+        """
+        Validate field config according to field_type.
+
+        If config is missing or empty, a default config is generated.
+        Then the config schema is checked by validate_config_for_field().
+        """
         field_type = attrs.get("field_type") or getattr(self.instance, "field_type", None)
         config = attrs.get("config", getattr(self.instance, "config", None))
 
@@ -91,9 +120,14 @@ class FieldSerializer(serializers.ModelSerializer):
 
         return attrs
 
-
 class FormDetailSerializer(serializers.ModelSerializer):
+    """
+    Full form serializer including nested fields.
+
+    Used for retrieving form details and patching forms with their fields.
+    """
     fields = FieldSerializer(many=True)
+    created_by = serializers.StringRelatedField(read_only=True)
 
     class Meta:
         model = FormModel
@@ -104,6 +138,7 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "is_public",
             "share_link",
             "slug",
+            "created_by",
             "created_at",
             "updated_at",
             "fields",
@@ -112,12 +147,22 @@ class FormDetailSerializer(serializers.ModelSerializer):
             "id",
             "share_link",
             "slug",
+            "created_by",
             "created_at",
             "updated_at",
         ]
-
     @transaction.atomic
     def update(self, instance, validated_data):
+        """
+        Update form data and synchronize nested fields atomically.
+
+        Behavior when `fields` is sent:
+        - Existing field ids are updated.
+        - Items without id are created as new fields.
+        - Existing fields not included in the payload are deleted.
+
+        If `fields` is not sent, only form metadata is updated.
+        """
         fields_were_sent = "fields" in validated_data
         fields_data = validated_data.pop("fields", None) 
 
@@ -158,6 +203,9 @@ class FormDetailSerializer(serializers.ModelSerializer):
 
 
 class ResponseSerializer(serializers.ModelSerializer):
+    """
+    Lightweight serializer for listing submitted responses.
+    """
     class Meta:
         model = AllResponse
         fields = [
@@ -171,6 +219,9 @@ class ResponseSerializer(serializers.ModelSerializer):
 # class ResponseDetailSerializer(serializers.ModelSerializer):
 #
 class ResponseFieldSerializer(serializers.ModelSerializer):
+    """
+    Serializer for one submitted field answer.
+    """
     class Meta:
         model = FieldResponse
         fields = [
@@ -180,6 +231,9 @@ class ResponseFieldSerializer(serializers.ModelSerializer):
 
 
 class ResponseDetailSerializer(serializers.ModelSerializer):
+    """
+    Detailed response serializer including all field answers.
+    """
     field_responses  = ResponseFieldSerializer(many=True, read_only=True)
     class Meta:
         model = AllResponse
@@ -194,7 +248,12 @@ class ResponseDetailSerializer(serializers.ModelSerializer):
 
 
 class FieldResponseSerializer(serializers.ModelSerializer):
-    
+    """
+    Serializer for receiving one answer item in form submission.
+
+    response_fields points to the FieldModel being answered.
+    """
+
     response_fields = serializers.PrimaryKeyRelatedField(queryset=FieldModel.objects.select_related("form"))
 
     class Meta:
@@ -206,13 +265,18 @@ class FieldResponseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('id',)
 
-    
-
-
-
-
 
 class SubmitSerializer(serializers.ModelSerializer):
+    """
+    Serializer for public form submission.
+
+    It validates submitted field responses against the target form:
+    - every field id must belong to the form
+    - duplicate answers are rejected
+    - required fields must be present
+    - field values must match field_type rules
+    - file fields are validated using request.FILES
+    """
     field_responses = FieldResponseSerializer(many=True)
 
     class Meta:
@@ -227,6 +291,16 @@ class SubmitSerializer(serializers.ModelSerializer):
         extra_kwargs = {"form": {"required": False}}
 
     def validate(self, attrs):
+        """
+        Validate the full form submission payload.
+
+        Expected context:
+        - form_id: target form id
+        - request: current request object, required for file uploads
+
+        The method builds a form field map, validates each submitted answer,
+        checks required fields, and finally attaches the resolved form to attrs.
+        """
         form_id = self.context.get("form_id")
         if not form_id:
             raise serializers.ValidationError({"form": "Form id is required in serializer context."})
@@ -333,6 +407,12 @@ class SubmitSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
+        """
+        Create a submitted form response and its field answers.
+
+        The operation is atomic so partial responses are not saved
+        if any database error occurs during creation.
+        """
         field_responses_data = validated_data.pop("field_responses", [])
         form = validated_data.pop("form")
         request = self.context.get("request")
@@ -359,6 +439,21 @@ class SubmitSerializer(serializers.ModelSerializer):
 
 
 def validate_value_for_field(field: FieldModel, value):
+    """
+    Validate a submitted value based on the field type and config.
+
+    Supported validations:
+    - text/password/tag: string constraints
+    - email: email format and string constraints
+    - phone: regex-based phone format
+    - url: URL format
+    - number/slider: numeric min/max
+    - checkbox: list of allowed choices
+    - dropdown/radio/switch: one allowed choice
+    - date: ISO date format
+    - time: ISO time format
+    - file: handled separately through request.FILES
+    """
     field_type = field.field_type
     config = field.config or {}
 
@@ -438,6 +533,9 @@ def validate_value_for_field(field: FieldModel, value):
 
 
 def _validate_string_constraints(value, config):
+    """
+    Validate min_length, max_length, and regex for string-based fields.
+    """
     min_length = config.get("min_length")
     max_length = config.get("max_length")
     regex = config.get("regex")
@@ -451,6 +549,9 @@ def _validate_string_constraints(value, config):
 
 
 def _validate_number_constraints(value, config):
+    """
+    Validate min and max constraints for numeric fields.
+    """
     min_value = config.get("min")
     max_value = config.get("max")
 
@@ -461,6 +562,11 @@ def _validate_number_constraints(value, config):
 
 
 def _get_allowed_choices(config):
+    """
+    Normalize choices from field config and return allowed values.
+
+    Choices can be plain values or objects with a `value` key.
+    """
     choices = config.get("choices")
     if choices is None:
         return None

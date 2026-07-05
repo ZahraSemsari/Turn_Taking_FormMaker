@@ -17,6 +17,7 @@ class FormModelAdmin(admin.ModelAdmin):
     list_filter = (
         "is_public",
         "created_at",
+        "created_by",
     )
     search_fields = (
         "title",
