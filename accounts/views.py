@@ -9,7 +9,7 @@ from dj_rest_auth.registration.views import SocialLoginView
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 import logging
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -46,10 +46,10 @@ def GetUserInfo(request):
 
 #---------------------------------Get all users---------------------------
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def GetAllUsers(request):
-    users = User.objects.filter(is_active=True).order_by("id")
-    serializer = PublicUserSerializer(users, many=True)
+    users = User.objects.all().order_by("id")
+    serializer = UserSerializer(users, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
