@@ -244,3 +244,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             })
         
         return user
+
+
+    class PublicUserSerializer(serializers.ModelSerializer):
+        full_name = serializers.SerializerMethodField()
+
+        class Meta:
+            model = User
+            fields = ["id", "username", "first_name", "last_name", "full_name"]
+
+        def get_full_name(self, obj):
+            return obj.get_full_name()

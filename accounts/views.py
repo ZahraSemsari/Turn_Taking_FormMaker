@@ -1,5 +1,4 @@
 from rest_framework.permissions import AllowAny
-from .serializers import UserSerializer, EmailOrUsernameOrMobileTokenObtainPairSerializer, RegisterSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from allauth.account.models import EmailAddress
 from django.contrib.auth import get_user_model
@@ -19,6 +18,12 @@ import re
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .throttles import LoginRateThrottle
+from .serializers import (
+    UserSerializer,
+    PublicUserSerializer,
+    EmailOrUsernameOrMobileTokenObtainPairSerializer,
+    RegisterSerializer,
+)
 
 User = get_user_model()
 
@@ -38,6 +43,16 @@ def GetUserInfo(request):
     user = request.user
     user_serializer = UserSerializer(user)
     return Response(user_serializer.data)
+
+#---------------------------------Get all users---------------------------
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def GetAllUsers(request):
+    users = User.objects.filter(is_active=True).order_by("id")
+    serializer = PublicUserSerializer(users, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailOrUsernameOrMobileTokenObtainPairSerializer
@@ -565,3 +580,5 @@ class LogoutView(APIView):
             {"detail": "Logout successful."},
             status=status.HTTP_200_OK
         )
+
+

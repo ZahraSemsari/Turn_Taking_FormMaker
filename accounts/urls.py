@@ -34,6 +34,7 @@ urlpatterns = [
 
     # User profile
     path("me/", views.GetUserInfo, name="users-me"),
+    path("users/", views.GetAllUsers, name="users-list"),
     path("profile/complete/", complete_profile, name="users-profile-complete"),
 
     #logout
