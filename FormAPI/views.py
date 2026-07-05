@@ -18,6 +18,12 @@ from Form.models import FormModel
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
 def get_owned_form_or_404(request, pk):
+    """
+    Return a form only if it belongs to the authenticated user.
+
+    This helper prevents users from reading or modifying forms
+    created by other accounts.
+    """
     return get_object_or_404(FormModel, pk=pk, created_by=request.user)
 
 def get_owned_form_or_404(request, pk):
@@ -30,8 +36,16 @@ def get_owned_form_or_404(request, pk):
 
 
 
-# Create your views here.
 class FormListAPIView(APIView):
+    """
+    List and create forms for the authenticated user.
+
+    GET:
+    - returns forms owned by the current user
+
+    POST:
+    - creates a new form owned by the current user
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -53,6 +67,12 @@ class FormListAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PublicFormView(APIView):
+    """
+    Return a public form by signed share token.
+
+    The token contains owner user id and form id.
+    Invalid or tampered tokens are rejected.
+    """
     def get(self, request, token):
         try:
             data = decode_form_token(token)
@@ -70,6 +90,13 @@ class PublicFormView(APIView):
 
 
 class FormDetailsAPIView(APIView):
+    """
+    Retrieve, update, or delete a single form owned by the authenticated user.
+
+    GET: return form details
+    PATCH: update form metadata and optionally nested fields
+    DELETE: delete the form
+    """
     permission_classes = [IsAuthenticated]
 
     def get_object(self, request, pk):
@@ -100,6 +127,18 @@ class FormDetailsAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class FieldListAPIView(APIView):
+    """
+    List, create, or bulk-update fields of a form.
+
+    GET:
+    - list all fields of the form
+
+    POST:
+    - create one or more fields for the form
+
+    PATCH:
+    - update existing fields or create new ones from a list payload
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk_f):
@@ -162,6 +201,11 @@ class FieldListAPIView(APIView):
 
 
 class FieldDetailsAPIView(APIView):
+    """
+    Retrieve, update, or delete one field from a form.
+
+    Access is limited to fields whose form belongs to the current user.
+    """
     permission_classes = [IsAuthenticated]
 
     def get_object(self, request, pk_f, pk):
@@ -199,6 +243,11 @@ class FieldDetailsAPIView(APIView):
 
 
 class ResponseListAPIView(APIView):
+    """
+    List submitted responses for a form owned by the authenticated user.
+
+    Returns both total answer count and response list.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk_f):
@@ -223,6 +272,9 @@ class ResponseListAPIView(APIView):
 
 
 class ResponseDetailAPIView(APIView):
+    """
+    Return details of one submitted response for a form.
+    """
     permission_classes = [IsAuthenticated]
 
     def get_object(self, request, pk_f, pk):
@@ -241,6 +293,11 @@ class ResponseDetailAPIView(APIView):
 
 
 class ResponseFieldListAPIView(APIView):
+    """
+    List all submitted answers for one specific field of a form.
+
+    Useful for viewing aggregated answers of a single form field.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk_f, pk_field):
@@ -274,6 +331,16 @@ class ResponseFieldListAPIView(APIView):
 
 
 class SubmitAPIView(APIView):
+    """
+    Public endpoint for submitting a response to a public form.
+
+    Supports:
+    - application/json
+    - multipart/form-data
+
+    For multipart submissions, field_responses may be sent as a JSON string.
+    File fields must be uploaded with keys like file_<field_id>.
+    """
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -307,6 +374,12 @@ class SubmitAPIView(APIView):
 
 
 class ExportResponsesExcelAPIView(APIView):
+    """
+    Export all responses of a form as an Excel file.
+
+    Each form field becomes one Excel column.
+    File fields are exported as uploaded file URLs.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk_f):
