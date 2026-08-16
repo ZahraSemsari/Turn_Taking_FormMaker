@@ -1,15 +1,5 @@
 from django.urls import path
-from .views import (
-    FormListAPIView,
-    FormDetailsAPIView,
-    FieldListAPIView,
-    FieldDetailsAPIView,
-    ResponseListAPIView,
-    ResponseDetailAPIView,
-    ResponseFieldListAPIView,
-    SubmitAPIView,
-    ExportResponsesExcelAPIView
-)
+from .views import *
 
 
 # Form API routes.
@@ -30,6 +20,12 @@ urlpatterns = [
     path("forms/<int:pk_f>/submit/", SubmitAPIView.as_view(), name="form-submit"),
 
     path("forms/<int:pk_f>/export/", ExportResponsesExcelAPIView.as_view(), name="export-responses"),
+
+    path(
+        "f/<str:token>/",
+        PublicFormAPIView.as_view(),
+        name="public-form",
+    ),
 
 
 ]

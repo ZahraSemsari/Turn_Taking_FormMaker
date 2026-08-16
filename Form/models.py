@@ -222,4 +222,6 @@ class FieldResponse(models.Model):
         if self.response.form.id != self.response_fields.form.id:
             raise ValidationError("this response is not related to this form ")
 
-
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)

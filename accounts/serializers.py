@@ -143,6 +143,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         if len(value) > 150:
             raise serializers.ValidationError("Username must be less than 150 characters.")
 
+        if value.isdigit():
+            raise serializers.ValidationError("Username cannot contain only numbers")
+
         if not re.match(r'^[\w.+-]+$', value):
             raise serializers.ValidationError(
                 "Username may contain only letters, numbers, and ./+/-/_ characters."

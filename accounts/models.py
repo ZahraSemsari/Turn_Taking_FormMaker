@@ -83,8 +83,8 @@ class User(AbstractUser):
     
     #-----------------------profile-check------------------------------
 
-    is_profile_completed = models.BooleanField(default=False)
-    has_set_password = models.BooleanField(default=False)
+    # is_profile_completed = models.BooleanField(default=False)
+    # has_set_password = models.BooleanField(default=False)
 
     
     USERNAME_FIELD = "username"
@@ -244,3 +244,8 @@ class PhoneOTP(models.Model):
 
         otp.save(update_fields=updates)
         return False
+    
+
+#
+# token = RefreshToken(refresh_token)
+# token.blacklist()

@@ -34,24 +34,40 @@ from .models import PhoneOTP, User
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     model = User
+
+    @admin.display(boolean=True, description="Profile completed")
+    def profile_completed(self, obj):
+        return bool(
+            obj.username
+            and obj.mobile
+            and obj.has_usable_password()
+        )
+
+    @admin.display(boolean=True, description="Password set")
+    def password_set(self, obj):
+        return obj.has_usable_password()
+
     list_display = (
         "id",
         "username",
         "email",
         "mobile",
-        "is_profile_completed",
-        "has_set_password",
+        # "is_profile_completed",
+        # "has_set_password",
         "is_staff",
         "is_active",
         "date_joined",
+        "profile_completed",
+        "password_set",
     )
     list_filter = (
         "is_active",
         "is_staff",
         "is_superuser",
-        "is_profile_completed",
-        "has_set_password",
+        # "is_profile_completed",
+        # "has_set_password",
         "date_joined",
+
     )
     search_fields = ("username", "email", "mobile", "first_name", "last_name")
     ordering = ("-date_joined",)
@@ -59,7 +75,7 @@ class UserAdmin(BaseUserAdmin):
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         ("Personal info", {"fields": ("first_name", "last_name", "email", "mobile")}),
-        ("Profile status", {"fields": ("is_profile_completed", "has_set_password")}),
+        # ("Profile status", {"fields": ("is_profile_completed", "has_set_password")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Important dates", {"fields": ("last_login", "date_joined")}),
     )

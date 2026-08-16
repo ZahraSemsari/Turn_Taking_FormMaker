@@ -16,6 +16,7 @@ from openpyxl import Workbook
 from django.http import HttpResponse
 from Form.models import FormModel
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.core.signing import BadSignature
 
 def get_owned_form_or_404(request, pk):
     """
@@ -26,12 +27,7 @@ def get_owned_form_or_404(request, pk):
     """
     return get_object_or_404(FormModel, pk=pk, created_by=request.user)
 
-def get_owned_form_or_404(request, pk):
-    return get_object_or_404(
-        FormModel,
-        pk=pk,
-        created_by=request.user
-    )
+
 
 
 
@@ -66,25 +62,25 @@ class FormListAPIView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class PublicFormView(APIView):
-    """
-    Return a public form by signed share token.
+class PublicFormAPIView(APIView):
 
-    The token contains owner user id and form id.
-    Invalid or tampered tokens are rejected.
-    """
+    permission_classes = [AllowAny]
+
     def get(self, request, token):
         try:
             data = decode_form_token(token)
-        except signing.BadSignature:
-            raise NotFound("Invalid link")
+        except BadSignature:
+            raise NotFound("Invalid form link.")
 
-        user_id = data.get("u")
-        form_id = data.get("f")
-
-        form = get_object_or_404(FormModel, pk=form_id, created_by_id=user_id, is_public=True)
+        form = get_object_or_404(
+            FormModel,
+            id=data["f"],
+            created_by_id=data["u"],
+            is_public=True,
+        )
 
         serializer = serializers.FormDetailSerializer(form)
+
         return Response(serializer.data)
     
 

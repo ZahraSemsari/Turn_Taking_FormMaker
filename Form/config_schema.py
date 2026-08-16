@@ -11,7 +11,6 @@ FIELD_CONFIG_SCHEMAS = {
     "radio": {"allowed": {"choices", "default"}, "required": {"choices"}},
     "checkbox": {"allowed": {"choices", "min_select", "max_select", "default"}, "required": {"choices"}},
     "file": {"allowed": {"allowed_mime_types", "allowed_extensions", "max_size_mb"}, "required": {"allowed_mime_types"}}
-
 }
 
 # Default config used when frontend does not provide config for a field.

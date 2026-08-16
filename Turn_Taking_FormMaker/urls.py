@@ -22,7 +22,7 @@ from accounts.views import PasswordResetConfirmEchoView
 
 from django.conf import settings
 from django.conf.urls.static import static
-from FormAPI.views import PublicFormView
+from FormAPI.views import PublicFormAPIView
 
 
 urlpatterns = [
@@ -35,7 +35,7 @@ urlpatterns = [
     ),
 
     path("api/" , include("FormAPI.urls")),
-    path('f/<str:token>/', PublicFormView.as_view(), name="public-form"),
+    path('f/<str:token>/', PublicFormAPIView.as_view(), name="public-form"),
 
   path("auth/registration/account-confirm-email/<str:key>/",
        ConfirmEmailView.as_view(),

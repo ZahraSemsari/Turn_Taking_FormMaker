@@ -54,7 +54,6 @@ class FormCreateUpdateSerializer(serializers.ModelSerializer):
         if user and user.is_authenticated:
             validated_data["created_by"] = user
         else:
-            # اگر فرم بدون لاگین ساخته نمی‌شود، می‌تونی error بدهی
             raise serializers.ValidationError("Authentication required to create a form.")
         return super().create(validated_data)
 #
